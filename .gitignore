@@ -8,3 +8,6 @@
 !.env.example
 *.log
 
+# Local lab requirements
+/云原生软件技术-Lab1-场地预约系统开发与Docker容器化.pdf
+
