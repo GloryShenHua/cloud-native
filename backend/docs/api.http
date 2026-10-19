@@ -1,36 +1,52 @@
+# 在 IntelliJ HTTP Client 或 VS Code REST Client 中执行。
+# venueId 使用场地查询返回的编号；创建预约后，将响应 id 填入 reservationId。
 @baseUrl = http://localhost:8080
 @venueId = 1
 @reservationId = 1
 
-### Health
+### 健康检查：预期 200，status 为 UP
 GET {{baseUrl}}/actuator/health
 
-### List venues
-GET {{baseUrl}}/api/venues
+### 场地列表：返回数组，支持 limit 和 offset
+GET {{baseUrl}}/api/venues?limit=20&offset=0
 
-### Venue details
+### 场地详情
 GET {{baseUrl}}/api/venues/{{venueId}}
 
-### Create venue
+### 创建场地：预期 201，响应包含 id
 POST {{baseUrl}}/api/venues
 Content-Type: application/json
 
-{"name":"第三会议室","location":"教学楼 A303","capacity":20,"openingTime":"08:00","closingTime":"22:00","status":"OPEN"}
+{
+  "name": "第三会议室",
+  "location": "办公楼 A303",
+  "capacity": 20,
+  "openingTime": "08:00:00",
+  "closingTime": "22:00:00",
+  "status": "OPEN"
+}
 
-### Create reservation (copy the returned id into reservationId above)
+### 创建预约：预期 201；相同时段再次提交预期 409
 POST {{baseUrl}}/api/reservations
 Content-Type: application/json
 
-{"venueId":{{venueId}},"organizer":"云原生小组","reservationDate":"2026-11-01","startTime":"10:00","endTime":"11:00","purpose":"实验讨论"}
+{
+  "venueId": {{venueId}},
+  "organizer": "研发团队",
+  "reservationDate": "2026-11-01",
+  "startTime": "10:00:00",
+  "endTime": "11:00:00",
+  "purpose": "需求评审"
+}
 
-### Reservation list
-GET {{baseUrl}}/api/reservations?venueId={{venueId}}&date=2026-11-01&status=ACTIVE
+### 有效预约列表：查询参数为 date，不是 reservationDate
+GET {{baseUrl}}/api/reservations?venueId={{venueId}}&date=2026-11-01&status=ACTIVE&limit=20&offset=0
 
-### Reservation details
+### 预约详情：先更新文件顶部的 reservationId
 GET {{baseUrl}}/api/reservations/{{reservationId}}
 
-### Cancel reservation (retains history)
+### 取消预约：无请求体，返回 200 和 CANCELLED 状态的完整记录
 POST {{baseUrl}}/api/reservations/{{reservationId}}/cancel
 
-### DELETE is also a logical cancellation
+### DELETE 同样执行逻辑取消；重复取消仍返回 200
 DELETE {{baseUrl}}/api/reservations/{{reservationId}}
