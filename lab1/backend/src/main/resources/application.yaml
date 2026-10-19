@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: venue-booking-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/venue_booking}
+    username: ${DB_USERNAME:venue_app}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 10
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+      connection-init-sql: SET lock_timeout = '5s'
+  flyway:
+    enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
+      fail-on-numbers-for-enums: true
+    mapper:
+      allow-coercion-of-scalars: false
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+app:
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}

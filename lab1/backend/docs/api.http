@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:8080
+@venueId = 1
+@reservationId = 1
+
+### Health
+GET {{baseUrl}}/actuator/health
+
+### List venues
+GET {{baseUrl}}/api/venues
+
+### Venue details
+GET {{baseUrl}}/api/venues/{{venueId}}
+
+### Create venue
+POST {{baseUrl}}/api/venues
+Content-Type: application/json
+
+{"name":"第三会议室","location":"教学楼 A303","capacity":20,"openingTime":"08:00","closingTime":"22:00","status":"OPEN"}
+
+### Create reservation (copy the returned id into reservationId above)
+POST {{baseUrl}}/api/reservations
+Content-Type: application/json
+
+{"venueId":{{venueId}},"organizer":"云原生小组","reservationDate":"2026-11-01","startTime":"10:00","endTime":"11:00","purpose":"实验讨论"}
+
+### Reservation list
+GET {{baseUrl}}/api/reservations?venueId={{venueId}}&date=2026-11-01&status=ACTIVE
+
+### Reservation details
+GET {{baseUrl}}/api/reservations/{{reservationId}}
+
+### Cancel reservation (retains history)
+POST {{baseUrl}}/api/reservations/{{reservationId}}/cancel
+
+### DELETE is also a logical cancellation
+DELETE {{baseUrl}}/api/reservations/{{reservationId}}

@@ -1,0 +1,5 @@
+# Only for host-side Maven/IDE development. The default compose.yaml keeps PostgreSQL private.
+services:
+  database:
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-55432}:5432"

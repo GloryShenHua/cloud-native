@@ -1,0 +1,63 @@
+name: cloud-native-lab1-backend
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-venue_booking}
+      POSTGRES_USER: ${DB_USERNAME:-venue_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+    volumes:
+      - database_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: cloud-native-lab1-api:1.0.0
+    build:
+      context: .
+      target: runtime
+    environment:
+      DB_URL: jdbc:postgresql://database:5432/${DB_NAME:-venue_booking}
+      DB_USERNAME: ${DB_USERNAME:-venue_app}
+      DB_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  test-database:
+    image: postgres:17-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_DB: booking_tests
+      POSTGRES_USER: booking_test
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking_test -d booking_tests"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    environment:
+      TEST_DATABASE_URL: jdbc:postgresql://test-database:5432/booking_tests
+      TEST_DATABASE_USERNAME: booking_test
+      TEST_DATABASE_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+    depends_on:
+      test-database:
+        condition: service_healthy
+
+volumes:
+  database_data:
