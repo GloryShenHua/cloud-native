@@ -1,0 +1,3 @@
+# 统一用 LF 保存与检出：容器内执行 /docker-entrypoint.d/*.sh 时，
+# 若脚本带 CRLF，Linux 会报 "/bin/sh^M: bad interpreter"，构建出来的镜像无法启动。
+* text=auto eol=lf

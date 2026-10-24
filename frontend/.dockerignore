@@ -1,0 +1,11 @@
+# 只把构建所需文件送进 Docker 上下文，避免本地依赖缓存进入镜像
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+docs
+*.md
