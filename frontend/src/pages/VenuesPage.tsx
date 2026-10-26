@@ -63,7 +63,6 @@ export function VenuesPage() {
       <div className="page-head">
         <div>
           <h1>场地列表</h1>
-          <p className="muted">查看场地信息，选择合适的时间进行预约。</p>
         </div>
         <div className="page-head-actions">
           <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>

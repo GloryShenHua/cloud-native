@@ -73,10 +73,9 @@ code { font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; }
 .breadcrumb > span:nth-child(2) { color: #c1c7bc; }
 .workspace-date { font-size: 11px; color: #707c66; white-space: nowrap; }
 .main { flex: 1; padding-top: 34px; padding-bottom: 48px; }
-.footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 18px; padding-bottom: 22px; color: #6f7a65; font-size: 11px; }
 .page { display: flex; flex-direction: column; gap: 22px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding-bottom: 4px; }
-.page-head h1 { margin-bottom: 7px; }
+.page-head h1 { margin-bottom: 0; }
 .page-head-actions { display: flex; gap: 9px; }
 .back-link { align-self: flex-start; font-size: 12px; color: var(--muted); }
 .back-link:hover { color: var(--brand); }
@@ -315,7 +314,6 @@ code { font: .9em ui-monospace, SFMono-Regular, Consolas, monospace; }
   .modal-backdrop { padding: 16px; }
   .modal { padding: 21px; max-height: calc(100dvh - 32px); }
   .detail-list { gap: 20px 16px; }
-  .footer { flex-direction: column; font-size: 10px; }
   .toast-stack { bottom: 16px; right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {

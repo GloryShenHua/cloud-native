@@ -133,9 +133,6 @@ export function ReservationsPage() {
       <div className="page-head">
         <div>
           <h1>预约记录</h1>
-          <p className="muted">
-            按场地、日期或状态查找预约，查看详情或取消预约。
-          </p>
         </div>
         <div className="page-head-actions">
           <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>

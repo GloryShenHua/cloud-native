@@ -56,10 +56,6 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="container main">{children}</main>
-        <footer className="container footer">
-          <span>场地预约系统</span>
-          <span>预约时间以场地开放时间为准。</span>
-        </footer>
       </div>
     </div>
   );
