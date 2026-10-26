@@ -6,6 +6,7 @@ import { ReservationBadge } from '../components/Badge';
 import { EmptyState, ErrorBanner, LoadingBlock } from '../components/Feedback';
 import { useToast } from '../components/ToastProvider';
 import { formatTime, reservationStatusLabel, timeRange } from '../lib/format';
+import { Icon } from '../components/Icon';
 
 const PAGE_SIZE = 20;
 
@@ -138,6 +139,7 @@ export function ReservationsPage() {
         </div>
         <div className="page-head-actions">
           <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>
+            <Icon name="refresh" width={15} height={15} />
             刷新
           </button>
         </div>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Icon } from './Icon';
 
 export function EmptyState({
   title,
@@ -12,7 +13,7 @@ export function EmptyState({
   return (
     <div className="empty-state">
       <span className="empty-state-mark" aria-hidden="true">
-        ∅
+        <Icon name="search" width={27} height={27} />
       </span>
       <strong>{title}</strong>
       <p>{description}</p>

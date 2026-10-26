@@ -6,6 +6,7 @@ import { EmptyState, ErrorBanner, LoadingBlock } from '../components/Feedback';
 import { VenueBadge } from '../components/Badge';
 import { useToast } from '../components/ToastProvider';
 import { venueStatusLabel } from '../lib/format';
+import { Icon } from '../components/Icon';
 
 type StatusFilter = 'ALL' | VenueStatus;
 const PAGE_SIZE = 12;
@@ -66,6 +67,7 @@ export function VenuesPage() {
         </div>
         <div className="page-head-actions">
           <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>
+            <Icon name="refresh" width={15} height={15} />
             刷新
           </button>
           <button
@@ -73,6 +75,7 @@ export function VenuesPage() {
             className="button button--primary"
             onClick={() => setShowCreate((current) => !current)}
           >
+            <Icon name="plus" width={16} height={16} />
             {showCreate ? '收起新建表单' : '新建场地'}
           </button>
         </div>
@@ -93,17 +96,20 @@ export function VenuesPage() {
         />
       ) : null}
 
-      <div className="toolbar">
+      <div className="toolbar venue-toolbar">
         <label className="field field--inline">
           <span className="field-label">关键词</span>
-          <input
-            value={keyword}
-            placeholder="按名称或位置筛选"
-            onChange={(event) => {
-              setKeyword(event.target.value);
-              setPage(1);
-            }}
-          />
+          <span className="search-input">
+            <Icon name="search" width={16} height={16} />
+            <input
+              value={keyword}
+              placeholder="按名称或位置筛选"
+              onChange={(event) => {
+                setKeyword(event.target.value);
+                setPage(1);
+              }}
+            />
+          </span>
         </label>
         <label className="field field--inline">
           <span className="field-label">状态</span>
@@ -142,21 +148,22 @@ export function VenuesPage() {
       ) : null}
 
       <div className="venue-grid">
+        {visibleVenues.length > 0 ? (
+          <div className="venue-directory-head" aria-hidden="true">
+            <span>场地 / 位置</span><span>容量 / 开放时间</span><span>状态</span><span>操作</span>
+          </div>
+        ) : null}
         {visibleVenues.map((venue) => (
           <article key={venue.id} className="card venue-card">
             <div className="venue-card-head">
+              <span className="venue-index" title={`场地编号 ${venue.id}`}>#{venue.id}</span>
               <div>
-                <h2>{venue.name}</h2>
-                <p className="muted">{venue.location}</p>
+                <h2 title={venue.name}><Link to={`/venues/${venue.id}`}>{venue.name}</Link></h2>
+                <p className="muted" title={venue.location}>{venue.location}</p>
               </div>
-              <VenueBadge status={venue.status} />
             </div>
 
             <dl className="venue-meta">
-              <div>
-                <dt>编号</dt>
-                <dd>#{venue.id}</dd>
-              </div>
               <div>
                 <dt>容纳人数</dt>
                 <dd>{venue.capacity} 人</dd>
@@ -169,15 +176,19 @@ export function VenuesPage() {
               </div>
             </dl>
 
+            <VenueBadge status={venue.status} />
             <div className="venue-card-actions">
-              <Link className="button button--primary button--sm" to={`/venues/${venue.id}`}>
-                查看详情 / 预约
-              </Link>
               <Link
-                className="button button--ghost button--sm"
+                className="venue-record-link"
                 to={`/reservations?venueId=${venue.id}`}
+                aria-label={`查看${venue.name}的预约记录`}
               >
-                该场地预约
+                记录
+              </Link>
+              <Link className="button button--outline button--sm" to={`/venues/${venue.id}`}
+                aria-label={venue.status === 'OPEN' ? `预约${venue.name}` : `查看${venue.name}详情`}>
+                {venue.status === 'OPEN' ? '预约' : '详情'}
+                <Icon name="arrow-right" width={14} height={14} />
               </Link>
             </div>
           </article>
