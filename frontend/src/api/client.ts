@@ -74,7 +74,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(
       0,
       'NETWORK_UNREACHABLE',
-      `无法连接后端服务（${apiBaseUrl}），请确认 API 已启动。`,
+      '暂时无法连接服务，请稍后重试。',
       [],
     );
   }
@@ -100,6 +100,7 @@ function queryOf(query: ReservationQuery): Record<string, string | number | unde
     venueId: query.venueId,
     date: query.date,
     status: query.status,
+    order: query.order,
     limit: query.limit,
     offset: query.offset,
   };
@@ -108,6 +109,16 @@ function queryOf(query: ReservationQuery): Record<string, string | number | unde
 export const api = {
   listVenues(limit = 100, offset = 0): Promise<Venue[]> {
     return request<Venue[]>(buildUrl('/venues', { limit, offset }));
+  },
+
+  async listAllVenues(): Promise<Venue[]> {
+    const venues: Venue[] = [];
+    const batchSize = 200;
+    for (let offset = 0; ; offset += batchSize) {
+      const page = await api.listVenues(batchSize, offset);
+      venues.push(...page);
+      if (page.length < batchSize) return venues;
+    }
   },
 
   getVenue(id: number): Promise<Venue> {
@@ -153,35 +164,35 @@ export function describeError(error: unknown): { title: string; hint: string } {
         };
       case 'INVALID_ARGUMENT':
         return {
-          title: '请求参数有误',
+          title: '请检查填写内容',
           hint: error.details.length > 0
             ? '请检查标红的字段后重新提交。'
-            : '请检查必填项、日期格式、时间范围与场地状态。',
+            : error.message.includes('JSON') || error.message.includes('HTTP')
+              ? '请检查必填项、预约日期和时间范围后重新提交。'
+              : error.message,
         };
       case 'NOT_FOUND':
-        return { title: '资源不存在', hint: '记录可能已被删除或编号错误，请刷新列表。' };
+        return { title: '未找到相关记录', hint: '场地或预约可能已不存在，请返回列表刷新后重试。' };
       case 'DATABASE_UNAVAILABLE':
-        return { title: '数据库暂不可用', hint: '后端正在重连或等待锁超时，请稍后重试。' };
+        return { title: '服务暂时不可用', hint: '暂时无法完成操作，请稍后重试。' };
       case 'INTERNAL_ERROR':
-        return { title: '服务端内部错误', hint: '后端处理失败，请查看 api 容器日志。' };
+        return { title: '操作未完成', hint: '服务出现异常，请稍后重试。' };
       case 'NETWORK_UNREACHABLE':
-        return { title: '无法连接后端', hint: error.message };
+        return { title: '暂时无法连接服务', hint: '请检查网络连接，稍后重试。' };
       case 'HTTP_403':
         // Spring 的 CORS 拒绝不返回 JSON 错误体，只能靠状态码判断。
         return {
-          title: '请求被后端拒绝（403）',
-          hint: `当前页面来源 ${
-            typeof window === 'undefined' ? '' : window.location.origin
-          } 可能不在后端跨域白名单中：把该 origin 加入 CORS_ALLOWED_ORIGINS 后重启 api。`,
+          title: '暂时无法提交',
+          hint: '当前访问地址暂不可用，请联系管理员或稍后重试。',
         };
       default:
         return {
-          title: `请求失败（HTTP ${error.status}）`,
-          hint: '请结合状态码检查请求内容与浏览器控制台，服务端日志见 api 容器。',
+          title: '操作未完成',
+          hint: '请稍后重试，仍无法操作时请联系管理员。',
         };
     }
   }
-  return { title: '请求失败', hint: error instanceof Error ? error.message : '未知错误' };
+  return { title: '操作未完成', hint: '请稍后重试，仍无法操作时请联系管理员。' };
 }
 
 export function fieldErrorsOf(error: unknown): Record<string, string> {

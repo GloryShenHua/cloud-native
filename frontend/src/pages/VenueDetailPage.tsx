@@ -58,7 +58,7 @@ export function VenueDetailPage() {
 
   const loadRecent = useCallback(async () => {
     try {
-      const list = await api.listReservations({ venueId, limit: 20 });
+      const list = await api.listReservations({ venueId, limit: 20, order: 'DESC' });
       setRecent(list);
     } catch {
       setRecent([]);
@@ -154,7 +154,7 @@ export function VenueDetailPage() {
             </span>
             <div>
               <h2>预约成功</h2>
-              <p className="muted">后端已返回 201，编号 #{created.id}</p>
+              <p className="muted">预约编号 #{created.id}</p>
             </div>
           </div>
           <dl className="created-card-meta">
@@ -229,7 +229,7 @@ export function VenueDetailPage() {
           <div className="card-head">
             <h2>该场地近期预约</h2>
             <p className="muted">
-              调用 <code>GET /api/reservations?venueId={venue.id}</code>，按编号升序返回最近 20 条。
+              展示最近创建的 20 条预约，最新记录在前。
             </p>
           </div>
 

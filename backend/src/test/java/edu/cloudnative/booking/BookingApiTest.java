@@ -188,6 +188,49 @@ class BookingApiTest {
     }
 
     @Test
+    void newestReservationsAreSortedBeforePagination() throws Exception {
+        for (int day = 1; day <= 25; day++) {
+            jdbc.update("""
+                    INSERT INTO reservations (venue_id, organizer, reservation_date, start_time, end_time, purpose, status)
+                    VALUES (1, 'ordering test', DATE '2026-11-01' + CAST(? AS INTEGER), '10:00', '11:00', 'ordering', 'ACTIVE')
+                    """, day);
+        }
+        long newestId = jdbc.queryForObject("SELECT max(id) FROM reservations", Long.class);
+        mvc.perform(get("/api/reservations?venueId=1&order=DESC&limit=20"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(20))
+                .andExpect(jsonPath("$[0].id").value(newestId))
+                .andExpect(jsonPath("$[19].id").value(newestId - 19));
+        mvc.perform(get("/api/reservations?venueId=1&order=DESC&limit=20&offset=20"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(5))
+                .andExpect(jsonPath("$[0].id").value(newestId - 20));
+        mvc.perform(get("/api/reservations?venueId=1&order=DESC&date=2026-11-26&status=ACTIVE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(newestId));
+    }
+
+    @Test
+    void invalidReservationOrderReturns400() throws Exception {
+        mvc.perform(get("/api/reservations?order=invalid"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("INVALID_ARGUMENT"));
+    }
+
+    @Test
+    void venuePaginationContinuesAfterTwoHundredRows() throws Exception {
+        // Additional data stays inside this test run's private schema.
+        jdbc.update("""
+                INSERT INTO venues (name, location, capacity, opening_time, closing_time, status)
+                SELECT 'pagination venue ' || value, 'pagination test', 20, TIME '08:00', TIME '22:00', 'OPEN'
+                FROM generate_series(1, 205) AS value
+                """);
+        var ids = jdbc.queryForList("SELECT id FROM venues ORDER BY id", Long.class);
+        mvc.perform(get("/api/venues?limit=200&offset=0"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(200));
+        mvc.perform(get("/api/venues?limit=200&offset=200"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(ids.size() - 200))
+                .andExpect(jsonPath("$[0].id").value(ids.get(200)));
+    }
+
+    @Test
     void corsSupportsFrontendAndRejectsUnconfiguredOrigin() throws Exception {
         mvc.perform(options("/api/reservations").header("Origin", "http://localhost:5173")
                         .header("Access-Control-Request-Method", "POST").header("Access-Control-Request-Headers", "Content-Type"))

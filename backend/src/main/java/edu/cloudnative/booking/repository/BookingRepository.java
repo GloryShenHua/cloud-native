@@ -79,12 +79,13 @@ public class BookingRepository {
     }
 
     public List<Reservation> listReservations(Long venueId, LocalDate date,
-                                              ReservationStatus status, int limit, int offset) {
+                                              ReservationStatus status, SortDirection order, int limit, int offset) {
         StringBuilder sql = new StringBuilder("SELECT * FROM reservations WHERE 1=1");
         if (venueId != null) sql.append(" AND venue_id = :venueId");
         if (date != null) sql.append(" AND reservation_date = :date");
         if (status != null) sql.append(" AND status = :status");
-        sql.append(" ORDER BY id LIMIT :limit OFFSET :offset");
+        // Only the validated enum is used as SQL syntax; request values remain bound parameters.
+        sql.append(" ORDER BY id ").append(order.name()).append(" LIMIT :limit OFFSET :offset");
         var query = jdbc.sql(sql.toString()).param("limit", limit).param("offset", offset);
         if (venueId != null) query.param("venueId", venueId);
         if (date != null) query.param("date", date);

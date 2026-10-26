@@ -8,6 +8,7 @@ import { useToast } from '../components/ToastProvider';
 import { venueStatusLabel } from '../lib/format';
 
 type StatusFilter = 'ALL' | VenueStatus;
+const PAGE_SIZE = 12;
 
 export function VenuesPage() {
   const toast = useToast();
@@ -17,11 +18,12 @@ export function VenuesPage() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [showCreate, setShowCreate] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api.listVenues();
+      const list = await api.listAllVenues();
       setVenues(list);
       setLoadError(null);
     } catch (error) {
@@ -51,13 +53,16 @@ export function VenuesPage() {
   }, [venues, keyword, statusFilter]);
 
   const errorInfo = loadError === null ? null : describeError(loadError);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleVenues = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <section className="page">
       <div className="page-head">
         <div>
           <h1>场地列表</h1>
-          <p className="muted">选择场地查看详情并创建预约，数据由 <code>GET /api/venues</code> 提供。</p>
+          <p className="muted">查看场地信息，选择合适的时间进行预约。</p>
         </div>
         <div className="page-head-actions">
           <button type="button" className="button button--ghost" onClick={() => void load()} disabled={loading}>
@@ -82,6 +87,7 @@ export function VenuesPage() {
               message: `${venue.name}（${venue.location}）`,
             });
             setShowCreate(false);
+            setPage(1);
             void load();
           }}
         />
@@ -93,14 +99,20 @@ export function VenuesPage() {
           <input
             value={keyword}
             placeholder="按名称或位置筛选"
-            onChange={(event) => setKeyword(event.target.value)}
+            onChange={(event) => {
+              setKeyword(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
         <label className="field field--inline">
           <span className="field-label">状态</span>
           <select
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+            onChange={(event) => {
+              setStatusFilter(event.target.value as StatusFilter);
+              setPage(1);
+            }}
           >
             <option value="ALL">全部</option>
             <option value="OPEN">{venueStatusLabel.OPEN}</option>
@@ -108,7 +120,7 @@ export function VenuesPage() {
           </select>
         </label>
         <span className="toolbar-meta muted">
-          共 {venues?.length ?? 0} 个场地，当前显示 {filtered.length} 个
+          {venues === null ? '正在加载场地…' : `共 ${venues.length} 个场地，匹配 ${filtered.length} 个`}
         </span>
       </div>
 
@@ -123,14 +135,14 @@ export function VenuesPage() {
           title="没有匹配的场地"
           description={
             venues.length === 0
-              ? '后端尚未返回任何场地，请确认数据库迁移已插入示例数据。'
+              ? '还没有可用场地，可以先新建场地。'
               : '调整关键词或状态筛选后再试。'
           }
         />
       ) : null}
 
       <div className="venue-grid">
-        {filtered.map((venue) => (
+        {visibleVenues.map((venue) => (
           <article key={venue.id} className="card venue-card">
             <div className="venue-card-head">
               <div>
@@ -171,6 +183,21 @@ export function VenuesPage() {
           </article>
         ))}
       </div>
+      {filtered.length > 0 ? (
+        <nav className="pager" aria-label="场地分页">
+          <span className="muted">第 {currentPage} / {pageCount} 页 · 每页 {PAGE_SIZE} 个</span>
+          <div className="pager-actions">
+            <button type="button" className="button button--ghost button--sm"
+              disabled={loading || currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+              上一页
+            </button>
+            <button type="button" className="button button--ghost button--sm"
+              disabled={loading || currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>
+              下一页
+            </button>
+          </div>
+        </nav>
+      ) : null}
     </section>
   );
 }
@@ -230,7 +257,7 @@ function CreateVenuePanel({ onCreated }: { onCreated: (venue: Venue) => void }) 
     <form className="card create-panel" onSubmit={handleSubmit} noValidate>
       <div className="card-head">
         <h2>新建场地</h2>
-        <p className="muted">调用 <code>POST /api/venues</code>，成功后返回 201 与 Location 响应头。</p>
+        <p className="muted">填写场地信息和每日开放时间。</p>
       </div>
 
       <div className="form-grid">
@@ -308,11 +335,8 @@ function CreateVenuePanel({ onCreated }: { onCreated: (venue: Venue) => void }) 
       {failure !== null && failureInfo !== null ? (
         <div className="alert alert--error" role="alert">
           <div className="alert-body">
-            <strong>
-              {failureInfo.title}
-              <code className="code-tag">HTTP {failure.status} · {failure.code}</code>
-            </strong>
-            <p>{failure.message}</p>
+            <strong>{failureInfo.title}</strong>
+            <p>{failureInfo.hint}</p>
           </div>
         </div>
       ) : null}

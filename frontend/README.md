@@ -6,7 +6,7 @@ Lab 1 的第三层：浏览器 → **frontend（本目录）** → api → datab
 
 - [快速开始](#快速开始)
 - [目录结构](#目录结构)
-- [后端地址的三种配置方式](#后端地址的三种配置方式)
+- [后端地址配置](#后端地址配置)
 - [页面与接口对应关系](#页面与接口对应关系)
 - [容器镜像](#容器镜像)
 - [验收对照](#验收对照)
@@ -47,7 +47,7 @@ docker run --rm -p 127.0.0.1:5173:80 \
 # 浏览器打开 http://localhost:5173
 ```
 
-前端容器需要与 `api` 在同一个 Docker 网络，并通过 `API_UPSTREAM`（`主机:端口`）访问它；没有 api 网络时也可以临时用 `-e API_UPSTREAM=host.docker.internal:8080` 指向宿主机上暴露的 API。完整的三服务编排、数据库与端口策略由**部署同学**负责，前端这边只需要下面这几个约定：[部署对接说明](docs/integration-notes.md)。
+前端容器需要与 `api` 在同一个 Docker 网络，并通过 `API_UPSTREAM`（`主机:端口`）访问它；没有 api 网络时也可以临时用 `-e API_UPSTREAM=host.docker.internal:8080` 指向宿主机上暴露的 API。完整系统部署需统一编排前端、API 和数据库，运行约定见：[部署对接说明](docs/integration-notes.md)。
 
 ## 目录结构
 
@@ -78,13 +78,13 @@ frontend/
 ├── nginx/default.conf.template# 静态文件 + /api 反向代理 + SPA 回退
 ├── docs/
 │   ├── frontend-report.md     # 实验报告的前端章节
-│   ├── integration-notes.md   # 交给部署同学的对接说明
+│   ├── integration-notes.md   # 容器部署对接说明
 │   └── screenshots/           # 界面截图
 ├── Dockerfile                 # node 构建 → nginx 运行
 └── vite.config.ts
 ```
 
-## 后端地址的三种配置方式
+## 后端地址配置
 
 | 方式 | 配置项 | 生效时机 | 适用场景 |
 |---|---|---|---|
@@ -93,7 +93,7 @@ frontend/
 | 构建期变量 | `VITE_API_BASE_URL` | `pnpm build` 时 | 前端产物直接部署到其他域名，直连后端 |
 | 开发期代理 | `VITE_API_PROXY_TARGET` | `pnpm dev` 时 | 本地连接非默认端口的后端 |
 
-解析顺序为：`window.__APP_CONFIG__.apiBaseUrl`（运行时）→ `import.meta.env.VITE_API_BASE_URL`（构建期）→ `/api`。顶栏右侧会显示当前生效的地址，鼠标悬停可看到来源，便于排查“前端连错环境”。
+解析顺序为：`window.__APP_CONFIG__.apiBaseUrl`（运行时）→ `import.meta.env.VITE_API_BASE_URL`（构建期）→ `/api`。页面不显示连接配置。排查时查看浏览器网络请求和 `/config.js`，确认实际请求地址。
 
 选择绝对地址直连时，浏览器会产生跨域请求，需要把前端 origin 加入后端的 `CORS_ALLOWED_ORIGINS`。
 
@@ -101,10 +101,11 @@ frontend/
 
 | 页面 / 操作 | 接口 | 说明 |
 |---|---|---|
-| 场地列表 | `GET /api/venues` | 卡片展示名称、位置、容纳人数、开放时间、状态 |
+| 场地列表 | `GET /api/venues?limit=200&offset=...` | 分批完整加载，浏览器内搜索与筛选，每页显示 12 个 |
 | 场地详情 | `GET /api/venues/{id}` | 进入 `/venues/{id}` 时加载 |
 | 新建场地 | `POST /api/venues` | 列表页“新建场地”折叠表单，成功后刷新列表 |
-| 创建预约 | `POST /api/reservations` | 详情页表单，成功显示预约对象与 201 提示 |
+| 创建预约 | `POST /api/reservations` | 详情页表单，成功显示预约信息和编号 |
+| 最近创建的预约 | `GET /api/reservations?venueId&order=DESC&limit=20` | 最新创建的记录在前，包含有效与已取消预约 |
 | 当日已占用时段 | `GET /api/reservations?venueId&date&status=ACTIVE` | 仅作时间参考，冲突仍由后端判定 |
 | 预约记录 | `GET /api/reservations?venueId&date&status&limit&offset` | 筛选 + 每页 20 条分页 |
 | 预约详情 | `GET /api/reservations/{id}` | 表格“详情”按钮打开弹窗 |
@@ -115,11 +116,11 @@ frontend/
 | 状态 / 错误码 | 界面表现 |
 |---|---|
 | 409 `RESERVATION_CONFLICT` | “预约时间冲突”错误条 + 自动刷新当日已占用时段 |
-| 400 `INVALID_ARGUMENT` | “请求参数有误”，`details` 中的字段错误标红到对应输入框 |
-| 404 `NOT_FOUND` | “资源不存在”，提示刷新列表 |
-| 503 `DATABASE_UNAVAILABLE` | “数据库暂不可用”，提示稍后重试 |
-| 500 `INTERNAL_ERROR` / 其他 | “服务端内部错误”，提示查看 `api` 日志 |
-| 网络不可达 | “无法连接后端”，并在页面上显示当前 API 地址 |
+| 400 `INVALID_ARGUMENT` | “请检查填写内容”，`details` 中的字段错误标红到对应输入框 |
+| 404 `NOT_FOUND` | “未找到相关记录”，提示刷新列表 |
+| 503 `DATABASE_UNAVAILABLE` | “服务暂时不可用”，提示稍后重试 |
+| 500 `INTERNAL_ERROR` / 其他 | “操作未完成”，提示稍后重试 |
+| 网络不可达 | “暂时无法连接服务”，提示检查网络后重试 |
 
 ## 容器镜像
 
@@ -151,7 +152,7 @@ docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # �
 | 展示预约记录 | `/reservations`，`ReservationsPage` |
 | 取消预约 | 表格“取消”按钮 → `POST /api/reservations/{id}/cancel` |
 | 显示预约成功信息 | 详情页“预约成功”卡片 + 右上角轻提示 |
-| 显示冲突 / 参数错误等失败信息 | 表单内错误条（含 HTTP 状态与 `error.code`）、字段级标红、轻提示 |
+| 显示冲突 / 参数错误等失败信息 | 表单内操作提示、字段级标红和状态通知；错误码保留在请求响应中供排查 |
 
 其他硬性要求：
 
@@ -168,15 +169,16 @@ docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # �
 | 现象 | 原因与处理 |
 |---|---|
 | 列表能看到数据，但提交预约返回 403、响应体为空 | 浏览器 `Origin` 不在后端 `CORS_ALLOWED_ORIGINS` 中。GET 不带 `Origin` 所以列表正常，POST 带 `Origin` 被 Spring 拒绝。把地址栏里的 origin（`localhost` 与 `127.0.0.1` 要分别列出）加入白名单后重启 api |
-| 页面显示“无法连接后端服务（/api）” | 前端容器访问不到 `api`：确认 api 容器健康（`docker ps`）、`API_UPSTREAM` 与网络正确；`docker logs <api 容器>` 查看启动日志 |
+| 页面提示服务不可用或无法连接 | 前端容器访问不到 `api`：确认 api 容器健康（`docker ps`）、`API_UPSTREAM` 与网络正确；`docker logs <api 容器>` 查看启动日志 |
 | 刷新 `/venues/1` 出现 404 | 反向代理缺少 SPA 回退；Nginx 配置应包含 `try_files $uri $uri/ /index.html` |
 | `docker build` 卡在拉取基础镜像 | 网络无法访问 Docker Hub，可配置镜像加速源；`# syntax=docker/dockerfile:1` 也会触发外网拉取，本项目已移除该指令 |
-| 改了 `API_BASE_URL` 但页面地址没变 | `config.js` 由容器启动脚本生成，需要重启（或重建）前端容器；浏览器侧已对该文件禁用缓存 |
+| 改了 `API_BASE_URL` 但请求地址没变 | `config.js` 由容器启动脚本生成，需要重启（或重建）前端容器；浏览器侧已对该文件禁用缓存 |
 
 ## 已知限制
 
 - 后端当前没有登录鉴权与改期接口，前端也没有用户体系与登录页。
-- 列表分页使用 `limit`/`offset`，页面没有“总条数”，通过“下一页是否可点”判断是否还有数据。
+- 场地列表通过 `limit=200` 和递增的 `offset` 拉取全部场地，筛选与每页 12 条的展示在浏览器内完成。预约记录和筛选下拉框使用同一份完整场地列表。
+- 预约记录分页使用 `limit`/`offset`，后端不返回总条数，通过当前页是否满 20 条判断能否继续翻页。
 - 前端的时间输入精度为分钟，后端允许到秒但页面只提交 `HH:mm`。
 - 预约冲突的最终判定完全依赖后端；前端展示的“当日已占用时段”仅为提示。
 
@@ -185,6 +187,11 @@ docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # �
 ```bash
 pnpm dev        # 开发服务器 http://127.0.0.1:5173
 pnpm typecheck  # tsc --noEmit
+pnpm test       # 分页、近期预约与错误提示回归测试
 pnpm build      # 类型检查 + 生产构建
 pnpm preview    # 预览 dist/（同样代理 /api）
 ```
+
+场地全量加载适用于当前规模；数据量进一步增加时，应将关键词、状态筛选和总条数统计移到后端，以减少首次加载开销。
+
+2026-10-26 回归检查：`pnpm test` 的 12 项测试通过，覆盖 205 个场地的完整加载、翻页、跨页搜索与筛选、最新 20 条预约展示，以及错误提示中不暴露调试信息；`pnpm build` 通过类型检查和生产构建。

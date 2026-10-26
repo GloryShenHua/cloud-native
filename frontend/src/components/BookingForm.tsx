@@ -213,48 +213,26 @@ export function BookingForm({
         ) : (
           <div className="slot-chips">
             {bookedSlots.map((slot) => (
-              <button
+              <span
                 key={slot.id}
-                type="button"
                 className="chip chip--booked"
-                title={`点击填入该时段：${slot.organizer} · ${slot.purpose}`}
-                onClick={() => {
-                  update('startTime', formatTime(slot.startTime));
-                  update('endTime', formatTime(slot.endTime));
-                }}
+                title={`${slot.organizer} · ${slot.purpose}`}
               >
                 {timeRange(slot.startTime, slot.endTime)}
-              </button>
+              </span>
             ))}
           </div>
         )}
         <span className="slot-hint-note">
-          仅作参考：是否冲突由后端在事务中判定，下方提示以服务端返回为准。
+          已占用时段不可重复预约，相邻时段可正常预约。
         </span>
       </div>
 
       {failure !== null && failureInfo !== null ? (
         <div className="alert alert--error" role="alert" ref={alertRef}>
           <div className="alert-body">
-            <strong>
-              {failureInfo.title}
-              <code className="code-tag">
-                {failure.status === 0 ? failure.code : `HTTP ${failure.status} · ${failure.code}`}
-              </code>
-            </strong>
-            <p>{failure.message}</p>
-            {failureInfo.hint === failure.message ? null : (
-              <p className="muted">{failureInfo.hint}</p>
-            )}
-            {failure.details.length > 0 ? (
-              <ul className="alert-list">
-                {failure.details.map((issue) => (
-                  <li key={`${issue.field}-${issue.message}`}>
-                    <code>{issue.field}</code>：{issue.message}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <strong>{failureInfo.title}</strong>
+            <p>{failureInfo.hint}</p>
           </div>
         </div>
       ) : null}

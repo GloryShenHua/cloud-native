@@ -47,8 +47,8 @@ public class BookingService {
     }
 
     public List<Reservation> listReservations(Long venueId, LocalDate date,
-                                              ReservationStatus status, int limit, int offset) {
-        return repository.listReservations(venueId, date, status, limit, offset);
+                                              ReservationStatus status, SortDirection order, int limit, int offset) {
+        return repository.listReservations(venueId, date, status, order, limit, offset);
     }
 
     public Reservation getReservation(long id) {

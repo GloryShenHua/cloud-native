@@ -1,6 +1,6 @@
 # 前端与部署的对接说明
 
-本文件面向负责“数据库与部署集成”的同学。**本次前端交付只包含 `frontend/` 目录**：前端源码、前端 Dockerfile、Nginx 配置、本文档与报告章节。根目录的 `compose.yaml`、`.env.example` 与项目级 README 由你创建和维护，不在前端交付物内。
+本文说明前端容器与 API 的部署约定。**本次前端交付只包含 `frontend/` 目录**：前端源码、前端 Dockerfile、Nginx 配置、本文档与报告章节。根目录的 `compose.yaml`、`.env.example` 与项目级 README 由你创建和维护，不在前端交付物内。
 
 - [1. 构建镜像](#1-构建镜像)
 - [2. 运行契约](#2-运行契约)
@@ -60,7 +60,7 @@ docker build -t cloud-native-lab1-frontend:1.0.0 ./frontend
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-如果前端以后改到 `http://<服务器IP>:<端口>`，该 origin 也必须加入白名单。前端在收到 403 时会提示当前页面 origin，便于排查。
+如果前端以后改到 `http://<服务器IP>:<端口>`，该 origin 也必须加入白名单。前端收到 403 时显示提交失败提示；具体状态和响应在浏览器网络面板中排查。
 
 ## 4. 参考服务定义（仅供参考，不是交付文件）
 
@@ -89,9 +89,9 @@ frontend:
 
 | 项 | 归属 |
 |---|---|
-| `compose.yaml`、`.env.example`、项目级 README | 部署同学 |
-| api 镜像、数据库镜像、Volume、健康检查、端口发布策略 | 部署同学 |
-| 后端 CORS 默认值、`DB_*` 变量 | 后端 / 部署同学 |
+| `compose.yaml`、`.env.example`、项目级 README | 部署维护方 |
+| api 镜像、数据库镜像、Volume、健康检查、端口发布策略 | 部署维护方 |
+| 后端 CORS 默认值、`DB_*` 变量 | 后端 / 部署维护方 |
 | 登录鉴权、预约改期、列表总数 | 后端未提供，前端也不实现 |
 
 ## 6. 部署后自检
@@ -103,7 +103,7 @@ curl -s http://localhost:5173/config.js                                    # win
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5173/api/venues  # 200（经 Nginx 转发到 api）
 ```
 
-浏览器中至少确认：场地列表有数据、创建一条预约成功、再提交同一时段返回「预约时间冲突（409）」。若第一步就失败，先看 `docker logs <前端容器>` 里 `runtime config written` 那行与 Nginx 的 `proxy_pass` 报错。
+浏览器中至少确认：场地列表有数据、创建一条预约成功、再提交同一时段显示「预约时间冲突」，网络响应为 409。若第一步就失败，先看 `docker logs <前端容器>` 里 `runtime config written` 那行与 Nginx 的 `proxy_pass` 报错。
 
 ## 7. 构建环境注意事项
 

@@ -47,6 +47,7 @@ export interface ReservationQuery {
   venueId?: number;
   date?: string;
   status?: ReservationStatus;
+  order?: 'ASC' | 'DESC';
   limit?: number;
   offset?: number;
 }

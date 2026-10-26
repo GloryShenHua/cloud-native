@@ -42,6 +42,9 @@ Content-Type: application/json
 ### 有效预约列表：查询参数为 date，不是 reservationDate
 GET {{baseUrl}}/api/reservations?venueId={{venueId}}&date=2026-11-01&status=ACTIVE&limit=20&offset=0
 
+### 近期预约：先按编号降序排列，再取最新创建的 20 条
+GET {{baseUrl}}/api/reservations?venueId={{venueId}}&order=DESC&limit=20
+
 ### 预约详情：先更新文件顶部的 reservationId
 GET {{baseUrl}}/api/reservations/{{reservationId}}
 

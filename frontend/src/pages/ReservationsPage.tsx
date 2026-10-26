@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ApiError, api, describeError } from '../api/client';
+import { api, describeError } from '../api/client';
 import type { Reservation, ReservationStatus, Venue } from '../api/types';
 import { ReservationBadge } from '../components/Badge';
 import { EmptyState, ErrorBanner, LoadingBlock } from '../components/Feedback';
@@ -58,7 +58,7 @@ export function ReservationsPage() {
 
   useEffect(() => {
     void api
-      .listVenues()
+      .listAllVenues()
       .then(setVenues)
       .catch(() => setVenues([]));
   }, []);
@@ -121,9 +121,7 @@ export function ReservationsPage() {
       await load();
     } catch (error) {
       const info = describeError(error);
-      const message =
-        error instanceof ApiError && error.status !== 0 ? error.message : info.hint;
-      toast.push({ kind: 'error', title: info.title, message });
+      toast.push({ kind: 'error', title: info.title, message: info.hint });
     } finally {
       setCancellingId(null);
     }
@@ -135,7 +133,7 @@ export function ReservationsPage() {
         <div>
           <h1>预约记录</h1>
           <p className="muted">
-            调用 <code>GET /api/reservations</code>，支持按场地、日期与状态筛选以及 limit / offset 分页。
+            按场地、日期或状态查找预约，查看详情或取消预约。
           </p>
         </div>
         <div className="page-head-actions">

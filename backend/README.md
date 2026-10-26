@@ -78,7 +78,7 @@ Compose 中的 `DB_URL` 由服务名 `database` 和 `DB_NAME` 生成。接入外
 
 本地直连 API 的基础路径为 `http://localhost:8080/api`。JSON 字段使用 camelCase，请求体设置 `Content-Type: application/json`。
 
-成功响应直接返回资源对象或数组，没有 `code`、`data` 外层包装。列表按 `id` 升序返回，空列表为 `[]`，不附带总条数。创建成功返回 `201`，并在 `Location` 响应头中提供详情路径；查询和取消返回 `200`。
+成功响应直接返回资源对象或数组，没有 `code`、`data` 外层包装。列表默认按 `id` 升序返回，预约列表可通过 `order=DESC` 先返回新建记录。空列表为 `[]`，不附带总条数。创建成功返回 `201`，并在 `Location` 响应头中提供详情路径；查询和取消返回 `200`。
 
 | 方法 | 路径 | 请求 | 成功响应 |
 |---|---|---|---|
@@ -175,8 +175,11 @@ Compose 中的 `DB_URL` 由服务名 `database` 和 `DB_NAME` 生成。接入外
 | `venueId` | 预约列表 | 不筛选 | 正整数，按场地筛选 |
 | `date` | 预约列表 | 不筛选 | `YYYY-MM-DD`，按预约日期筛选 |
 | `status` | 预约列表 | 不筛选 | `ACTIVE` 或 `CANCELLED` |
+| `order` | 预约列表 | `ASC` | 按 `id` 排序：`ASC` 从旧到新，`DESC` 从新到旧；先排序，再应用 limit 和 offset |
 
 多个筛选条件同时生效。不传 `status` 时，结果包含有效和已取消记录。查询参数名是 `date`，请求体和响应对象中的字段名是 `reservationDate`。
+
+场地详情页的近期预约使用 `venueId=<id>&order=DESC&limit=20`，返回该场地最新创建的 20 条记录。`order` 不改变时间冲突检查，也不按预约日期排序。
 
 ```http
 GET /api/reservations?venueId=1&date=2026-11-01&status=ACTIVE&limit=20&offset=0

@@ -47,9 +47,10 @@ public class BookingController {
             @RequestParam(required = false) @Positive Long venueId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) ReservationStatus status,
+            @RequestParam(defaultValue = "ASC") SortDirection order,
             @RequestParam(defaultValue = "100") @Min(1) @Max(200) int limit,
             @RequestParam(defaultValue = "0") @Min(0) int offset) {
-        return service.listReservations(venueId, date, status, limit, offset);
+        return service.listReservations(venueId, date, status, order, limit, offset);
     }
 
     @GetMapping("/reservations/{id}")
