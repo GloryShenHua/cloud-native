@@ -324,9 +324,9 @@ docker volume ls --filter name=cloud-native-lab1
 
 | 模块 | 负责内容 | 交付位置 |
 |---|---|---|
-| 前端 | 页面、接口调用、交互反馈、响应式布局、前端镜像和说明 | frontend/ |
-| 后端 | API、参数校验、预约业务、并发事务、错误处理、后端镜像和测试 | backend/ |
-| 数据库 | 与后端确定表结构、约束和迁移；集成三服务编排、网络、数据卷与项目部署文档 | backend/src/main/resources/db/migration/、compose.yaml、.env.example、README.md |
+|  前端 (刘和鑫)  | 页面、接口调用、交互反馈、响应式布局、前端镜像和说明 | frontend/ |
+|  后端 (徐润杰)  | API、参数校验、预约业务、并发事务、错误处理、后端镜像和测试 | backend/ |
+|  数据库 (施钧凯)  | 与后端确定表结构、约束和迁移；集成三服务编排、网络、数据卷与项目部署文档 | backend/src/main/resources/db/migration/、compose.yaml、.env.example、README.md |
 
 ## 8. 问题处理与当前边界
 
