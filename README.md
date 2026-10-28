@@ -39,15 +39,15 @@ cloud-native/
 ├── .env.example                # 根目录环境变量示例文件（复制为 .env 后使用）
 ├── README.md                   # 项目总部署、运行、接口与验收说明文档（本文件）
 ├── docs/
-│   └── lab1-report.md          # Lab 1 完整汇总实验报告（含架构、数据库、容器化、持久化验证与用例截图）
-├── frontend/                   # 成员 A：前端应用源码、Dockerfile、Nginx 配置与前端报告章节
+│   └── lab1-report.md          # Lab 1 实验报告（含架构、数据库、容器化、持久化验证与用例截图）
+├── frontend/                   # 前端应用源码、Dockerfile、Nginx 配置与前端报告章节
 │   ├── Dockerfile
 │   ├── .dockerignore
 │   ├── nginx/default.conf.template
 │   ├── docker/40-runtime-config.sh
 │   ├── src/
 │   └── docs/
-└── backend/                    # 成员 B & C：后端 API 源码、Flyway 数据库迁移脚本、Dockerfile 与测试脚本
+└── backend/                    # 后端 API 源码、Flyway 数据库迁移脚本、Dockerfile 与测试脚本
     ├── Dockerfile
     ├── .dockerignore
     ├── pom.xml
@@ -166,7 +166,7 @@ cloud-native/
 
 ## 六、运行验收与数据持久化验证
 
-### 6.1 自动化冒烟验收（覆盖指导书 8.1 基本功能）
+### 6.1 自动化冒烟验收
 
 容器启动后，可直接运行冒烟测试脚本验证场地创建、正常预约、时间冲突拒绝（409）、取消预约及取消后重新预约：
 
@@ -174,7 +174,7 @@ cloud-native/
 python3 backend/scripts/smoke.py --url http://localhost:8080
 ```
 
-### 6.2 数据持久化验证流程（覆盖指导书 8.3）
+### 6.2 数据持久化验证流程
 
 ```bash
 # 1. 创建一条预约并记录返回的预约 id（或使用 smoke.py 输出的 persistentReservationId）
