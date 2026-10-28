@@ -19,10 +19,3 @@ const runtimeConfig = typeof window === 'undefined' ? undefined : window.__APP_C
 export const apiBaseUrl = normalizeBaseUrl(
   runtimeConfig?.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL,
 );
-
-export const apiBaseUrlSource =
-  (runtimeConfig?.apiBaseUrl ?? '').trim() !== ''
-    ? '运行时配置'
-    : (import.meta.env.VITE_API_BASE_URL ?? '').trim() !== ''
-      ? '构建期变量'
-      : '默认同源 /api';

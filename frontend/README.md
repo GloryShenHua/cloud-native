@@ -1,6 +1,6 @@
 # 场地预约系统 · 前端
 
-Lab 1 的第三层：浏览器 → **frontend（本目录）** → api → database。前端只通过 HTTP 调用后端 Web API，不直接连接数据库，也不作为预约冲突的唯一判定方。
+运行链路：浏览器 → **frontend（本目录）** → api → database。前端只通过 HTTP 调用后端 Web API，不直接连接数据库，也不作为预约冲突的唯一判定方。
 
 技术栈：React 19 + TypeScript + Vite 8 + React Router 7，构建产物由 Nginx 1.29 提供访问，并把 `/api` 反向代理到 `api:8080`。
 
@@ -14,6 +14,8 @@ Lab 1 的第三层：浏览器 → **frontend（本目录）** → api → datab
 
 ## 快速开始
 
+完整系统在仓库根目录执行 `docker compose up --build -d --wait`，详见[项目 README](../README.md)。以下命令用于分别开发前后端；先停止完整编排中占用同一端口的服务。
+
 ### 一、只跑前端（连接本机已启动的后端）
 
 ```bash
@@ -22,13 +24,13 @@ cd backend
 cp .env.example .env        # 首次运行
 docker compose up --build -d --wait
 
-# 终端 2：启动前端开发服务器（frontend 目录）
-cd ../frontend
+# 终端 2：从仓库根目录启动前端开发服务器
+cd frontend
 pnpm install
 pnpm dev                    # http://localhost:5173
 ```
 
-开发服务器把 `/api` 代理到 `http://127.0.0.1:8080`，浏览器侧是同源请求。但浏览器仍会在 POST 时带上 `Origin`，后端 CORS 白名单必须包含**地址栏里的 origin**：`http://localhost:5173` 与 `http://127.0.0.1:5173` 是两个不同的 origin。建议用 <http://localhost:5173> 打开；若要用 `127.0.0.1` 访问，需要后端在 `CORS_ALLOWED_ORIGINS` 里补上该地址（当前后端默认值只有 `localhost`，见[部署对接说明](docs/integration-notes.md#3-浏览器-origin-与-cors)）。
+开发服务器把 `/api` 代理到 `http://127.0.0.1:8080`，浏览器侧是同源请求。但浏览器仍会在 POST 时带上 `Origin`，后端 CORS 白名单必须包含**地址栏里的 origin**：`http://localhost:5173` 与 `http://127.0.0.1:5173` 是两个不同的 origin。建议用 <http://localhost:5173> 打开；若要用 `127.0.0.1` 访问，需要后端在 `CORS_ALLOWED_ORIGINS` 里补上该地址（当前后端默认值只有 `localhost`，见[部署对接说明](docs/integration-notes.md#浏览器来源与-cors)）。
 
 后端不在默认端口时：
 
@@ -89,7 +91,7 @@ frontend/
 | 方式 | 配置项 | 生效时机 | 适用场景 |
 |---|---|---|---|
 | 同源反向代理（默认） | 无需配置，浏览器请求 `/api` | 运行时 | 容器部署，Nginx 转发到 `api:8080` |
-| 运行时环境变量 | 容器环境变量 `API_BASE_URL` | 容器启动 | 换后端地址只需重启容器，不重新构建镜像 |
+| 运行时环境变量 | 容器环境变量 `API_BASE_URL` | 容器启动 | 换后端地址后重新创建容器，无需重新构建镜像 |
 | 构建期变量 | `VITE_API_BASE_URL` | `pnpm build` 时 | 前端产物直接部署到其他域名，直连后端 |
 | 开发期代理 | `VITE_API_PROXY_TARGET` | `pnpm dev` 时 | 本地连接非默认端口的后端 |
 
@@ -107,7 +109,7 @@ frontend/
 | 创建预约 | `POST /api/reservations` | 详情页表单，成功显示预约信息和编号 |
 | 最近创建的预约 | `GET /api/reservations?venueId&order=DESC&limit=20` | 最新创建的记录在前，包含有效与已取消预约 |
 | 当日已占用时段 | `GET /api/reservations?venueId&date&status=ACTIVE` | 仅作时间参考，冲突仍由后端判定 |
-| 预约记录 | `GET /api/reservations?venueId&date&status&limit&offset` | 筛选 + 每页 20 条分页 |
+| 预约记录 | `GET /api/reservations?venueId&date&status&limit&offset` | 筛选 + 每页 20 条，接口多取 1 条判断后续页 |
 | 预约详情 | `GET /api/reservations/{id}` | 表格“详情”按钮打开弹窗 |
 | 取消预约 | `POST /api/reservations/{id}/cancel` | 二次确认后调用，成功后刷新列表 |
 
@@ -126,7 +128,7 @@ frontend/
 
 ```bash
 docker build -t cloud-native-lab1-frontend:1.0.0 .   # 独立构建，上下文只有本目录
-docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # 约 62 MB
+docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # 大小随基础镜像更新，以实际构建结果为准
 ```
 
 镜像分两段：`node:24-alpine` 安装依赖并编译静态文件，`nginx:1.29-alpine` 只保留构建产物、Nginx 配置和启动脚本。运行阶段不含 Node、依赖缓存与源码；`.dockerignore` 排除了 `node_modules`、`dist`、`.env` 与文档。
@@ -172,13 +174,15 @@ docker image inspect cloud-native-lab1-frontend:1.0.0 --format '{{.Size}}'  # �
 | 页面提示服务不可用或无法连接 | 前端容器访问不到 `api`：确认 api 容器健康（`docker ps`）、`API_UPSTREAM` 与网络正确；`docker logs <api 容器>` 查看启动日志 |
 | 刷新 `/venues/1` 出现 404 | 反向代理缺少 SPA 回退；Nginx 配置应包含 `try_files $uri $uri/ /index.html` |
 | `docker build` 卡在拉取基础镜像 | 网络无法访问 Docker Hub，可配置镜像加速源；`# syntax=docker/dockerfile:1` 也会触发外网拉取，本项目已移除该指令 |
-| 改了 `API_BASE_URL` 但请求地址没变 | `config.js` 由容器启动脚本生成，需要重启（或重建）前端容器；浏览器侧已对该文件禁用缓存 |
+| 改了 `API_BASE_URL` 但请求地址没变 | `config.js` 由容器启动脚本生成，需执行 `docker compose up -d frontend` 重新创建前端容器；浏览器侧已对该文件禁用缓存 |
+
+占用时段和近期预约的请求失败会明确提示并提供重试。切换场地、日期和预约详情时，旧请求不会覆盖当前选择。
 
 ## 已知限制
 
 - 后端当前没有登录鉴权与改期接口，前端也没有用户体系与登录页。
 - 场地列表通过 `limit=200` 和递增的 `offset` 拉取全部场地，筛选与每页 12 条的展示在浏览器内完成。预约记录和筛选下拉框使用同一份完整场地列表。
-- 预约记录分页使用 `limit`/`offset`，后端不返回总条数，通过当前页是否满 20 条判断能否继续翻页。
+- 预约记录分页使用 `limit`/`offset`，后端不返回总条数，每次多取 1 条判断是否有下一页，页面仍显示 20 条。
 - 前端的时间输入精度为分钟，后端允许到秒但页面只提交 `HH:mm`。
 - 预约冲突的最终判定完全依赖后端；前端展示的“当日已占用时段”仅为提示。
 
@@ -194,7 +198,6 @@ pnpm preview    # 预览 dist/（同样代理 /api）
 
 场地全量加载适用于当前规模；数据量进一步增加时，应将关键词、状态筛选和总条数统计移到后端，以减少首次加载开销。
 
-2026-10-26 回归检查：`pnpm test` 的 12 项测试通过，覆盖 205 个场地的完整加载、翻页、跨页搜索与筛选、最新 20 条预约展示，以及错误提示中不暴露调试信息；`pnpm build` 通过类型检查和生产构建。
 
 ## 界面布局
 

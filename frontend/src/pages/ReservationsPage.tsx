@@ -17,7 +17,7 @@ export function ReservationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [venueId, setVenueId] = useState(searchParams.get('venueId') ?? '');
+  const venueId = searchParams.get('venueId') ?? '';
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [offset, setOffset] = useState(0);
@@ -25,12 +25,15 @@ export function ReservationsPage() {
   const [rows, setRows] = useState<Reservation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [revision, setRevision] = useState(0);
 
   const [detail, setDetail] = useState<Reservation | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const requestId = useRef(0);
+  const detailRequestId = useRef(0);
 
   const load = useCallback(async () => {
     const current = ++requestId.current;
@@ -40,22 +43,27 @@ export function ReservationsPage() {
         venueId: venueId === '' ? undefined : Number(venueId),
         date: date === '' ? undefined : date,
         status: status === 'ALL' ? undefined : status,
-        limit: PAGE_SIZE,
+        // 多取一条判断是否还有下一页，不把“恰好满页”误判为还有数据。
+        limit: PAGE_SIZE + 1,
         offset,
       });
       if (current !== requestId.current) return;
-      setRows(list);
+      setRows(list.slice(0, PAGE_SIZE));
+      setHasMore(list.length > PAGE_SIZE);
       setLoadError(null);
     } catch (error) {
       if (current !== requestId.current) return;
       setLoadError(error);
       setRows([]);
+      setHasMore(false);
     } finally {
       if (current === requestId.current) {
         setLoading(false);
       }
     }
-  }, [venueId, date, status, offset]);
+  }, [venueId, date, status, offset, revision]);
+
+  useEffect(() => { setOffset(0); }, [venueId]);
 
   useEffect(() => {
     void api
@@ -77,7 +85,6 @@ export function ReservationsPage() {
   const page = Math.floor(offset / PAGE_SIZE) + 1;
 
   function resetFilters() {
-    setVenueId('');
     setDate('');
     setStatus('ALL');
     setOffset(0);
@@ -85,15 +92,18 @@ export function ReservationsPage() {
   }
 
   async function openDetail(id: number) {
+    const current = ++detailRequestId.current;
     setDetailLoadingId(id);
     try {
       const reservation = await api.getReservation(id);
+      if (current !== detailRequestId.current) return;
       setDetail(reservation);
     } catch (error) {
+      if (current !== detailRequestId.current) return;
       const info = describeError(error);
       toast.push({ kind: 'error', title: info.title, message: info.hint });
     } finally {
-      setDetailLoadingId(null);
+      if (current === detailRequestId.current) setDetailLoadingId(null);
     }
   }
 
@@ -116,10 +126,9 @@ export function ReservationsPage() {
         title: `预约 #${updated.id} 已取消`,
         message: '记录保留并释放时段，可重新创建同一时段的预约。',
       });
-      if (detail?.id === updated.id) {
-        setDetail(updated);
-      }
-      await load();
+      setDetail((current) => current?.id === updated.id ? updated : current);
+      // 刷新当前筛选条件，避免取消请求发出后切换筛选，又被旧请求覆盖。
+      setRevision((current) => current + 1);
     } catch (error) {
       const info = describeError(error);
       toast.push({ kind: 'error', title: info.title, message: info.hint });
@@ -149,7 +158,6 @@ export function ReservationsPage() {
             value={venueId}
             onChange={(event) => {
               const value = event.target.value;
-              setVenueId(value);
               setOffset(0);
               setSearchParams(value === '' ? {} : { venueId: value }, { replace: true });
             }}
@@ -214,91 +222,91 @@ export function ReservationsPage() {
       ) : null}
 
       {rows !== null && rows.length > 0 ? (
-        <>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>编号</th>
-                  <th>场地</th>
-                  <th>预约人</th>
-                  <th>日期</th>
-                  <th>时段</th>
-                  <th>使用目的</th>
-                  <th>状态</th>
-                  <th className="table-actions-head">操作</th>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>编号</th>
+                <th>场地</th>
+                <th>预约人</th>
+                <th>日期</th>
+                <th>时段</th>
+                <th>使用目的</th>
+                <th>状态</th>
+                <th className="table-actions-head">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((reservation) => (
+                <tr key={reservation.id} className={reservation.status === 'CANCELLED' ? 'is-cancelled' : ''}>
+                  <td className="mono">#{reservation.id}</td>
+                  <td>
+                    <Link to={`/venues/${reservation.venueId}`}>{venueName(reservation.venueId)}</Link>
+                  </td>
+                  <td>{reservation.organizer}</td>
+                  <td className="mono">{reservation.reservationDate}</td>
+                  <td className="mono">
+                    {formatTime(reservation.startTime)}–{formatTime(reservation.endTime)}
+                  </td>
+                  <td className="table-purpose" title={reservation.purpose}>
+                    {reservation.purpose}
+                  </td>
+                  <td>
+                    <ReservationBadge status={reservation.status} />
+                  </td>
+                  <td>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="button button--ghost button--sm"
+                        disabled={detailLoadingId === reservation.id}
+                        onClick={() => void openDetail(reservation.id)}
+                      >
+                        {detailLoadingId === reservation.id ? '加载中…' : '详情'}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--danger button--sm"
+                        disabled={
+                          reservation.status === 'CANCELLED' || cancellingId === reservation.id
+                        }
+                        onClick={() => void cancel(reservation)}
+                      >
+                        {cancellingId === reservation.id ? '取消中…' : '取消'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((reservation) => (
-                  <tr key={reservation.id} className={reservation.status === 'CANCELLED' ? 'is-cancelled' : ''}>
-                    <td className="mono">#{reservation.id}</td>
-                    <td>
-                      <Link to={`/venues/${reservation.venueId}`}>{venueName(reservation.venueId)}</Link>
-                    </td>
-                    <td>{reservation.organizer}</td>
-                    <td className="mono">{reservation.reservationDate}</td>
-                    <td className="mono">
-                      {formatTime(reservation.startTime)}–{formatTime(reservation.endTime)}
-                    </td>
-                    <td className="table-purpose" title={reservation.purpose}>
-                      {reservation.purpose}
-                    </td>
-                    <td>
-                      <ReservationBadge status={reservation.status} />
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="button button--ghost button--sm"
-                          disabled={detailLoadingId === reservation.id}
-                          onClick={() => void openDetail(reservation.id)}
-                        >
-                          {detailLoadingId === reservation.id ? '加载中…' : '详情'}
-                        </button>
-                        <button
-                          type="button"
-                          className="button button--danger button--sm"
-                          disabled={
-                            reservation.status === 'CANCELLED' || cancellingId === reservation.id
-                          }
-                          onClick={() => void cancel(reservation)}
-                        >
-                          {cancellingId === reservation.id ? '取消中…' : '取消'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
-          <div className="pager">
-            <span className="muted">
-              第 {page} 页 · 每页 {PAGE_SIZE} 条
-            </span>
-            <div className="pager-actions">
-              <button
-                type="button"
-                className="button button--ghost button--sm"
-                disabled={offset === 0 || loading}
-                onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
-              >
-                上一页
-              </button>
-              <button
-                type="button"
-                className="button button--ghost button--sm"
-                disabled={loading || rows.length < PAGE_SIZE}
-                onClick={() => setOffset((current) => current + PAGE_SIZE)}
-              >
-                下一页
-              </button>
-            </div>
+      {rows !== null && (rows.length > 0 || offset > 0) ? (
+        <div className="pager">
+          <span className="muted">
+            第 {page} 页 · 每页 {PAGE_SIZE} 条
+          </span>
+          <div className="pager-actions">
+            <button
+              type="button"
+              className="button button--ghost button--sm"
+              disabled={offset === 0 || loading}
+              onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
+            >
+              上一页
+            </button>
+            <button
+              type="button"
+              className="button button--ghost button--sm"
+              disabled={loading || !hasMore}
+              onClick={() => setOffset((current) => current + PAGE_SIZE)}
+            >
+              下一页
+            </button>
           </div>
-        </>
+        </div>
       ) : null}
 
       {detail === null ? null : (

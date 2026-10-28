@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ApiError, api } from '../src/api/client';
 import type { Reservation, ReservationQuery, Venue } from '../src/api/types';
 import { ToastProvider } from '../src/components/ToastProvider';
@@ -17,6 +17,53 @@ const venue: Venue = { id: 1, name: '测试场地', location: '测试区', capac
   openingTime: '08:00:00', closingTime: '22:00:00', status: 'OPEN' };
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+function openDetail() {
+  return render(<MemoryRouter initialEntries={['/venues/1']}><ToastProvider>
+    <Link to="/venues/2">切换场地</Link>
+    <Routes><Route path="/venues/:id" element={<VenueDetailPage />} /></Routes>
+  </ToastProvider></MemoryRouter>);
+}
+
+it('ignores an old date response that arrives after the selected date response', async () => {
+  let resolveOld!: (records: Reservation[]) => void;
+  const oldRequest = new Promise<Reservation[]>((resolve) => { resolveOld = resolve; });
+  vi.mocked(api.getVenue).mockResolvedValue(venue);
+  vi.mocked(api.listReservations).mockImplementation((query = {}) => {
+    if (query.status !== 'ACTIVE') return Promise.resolve([]);
+    return query.date === '2026-11-02' ? Promise.resolve([]) : oldRequest;
+  });
+  openDetail();
+  await screen.findByRole('heading', { name: '测试场地' });
+  fireEvent.change(screen.getByLabelText('预约日期'), { target: { value: '2026-11-02' } });
+  await screen.findByText('暂无有效预约');
+  await act(async () => resolveOld([{
+    id: 99, venueId: 1, organizer: '旧日期', reservationDate: '2026-11-01',
+    startTime: '14:00', endTime: '15:00', purpose: '旧请求', status: 'ACTIVE',
+  }]));
+  expect(screen.queryByText('14:00–15:00')).toBeNull();
+});
+
+it('shows retry guidance instead of empty availability when loading fails', async () => {
+  vi.mocked(api.getVenue).mockResolvedValue(venue);
+  vi.mocked(api.listReservations).mockRejectedValue(new ApiError(503, 'DATABASE_UNAVAILABLE', 'internal'));
+  openDetail();
+  await screen.findByText('暂时无法加载占用时段，请刷新后确认。');
+  expect(screen.queryByText('暂无有效预约')).toBeNull();
+  expect(screen.queryByText('暂无预约记录')).toBeNull();
+  expect(screen.getByText('预约记录暂时无法加载')).toBeDefined();
+});
+
+it('clears the previous venue form while the next venue is loading', async () => {
+  vi.mocked(api.getVenue).mockResolvedValueOnce(venue).mockImplementation(() => new Promise(() => {}));
+  vi.mocked(api.listReservations).mockResolvedValue([]);
+  openDetail();
+  await screen.findByRole('heading', { name: '测试场地' });
+  fireEvent.click(screen.getByRole('link', { name: '切换场地' }));
+  expect(screen.queryByRole('button', { name: '提交预约' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: '测试场地' })).toBeNull();
+  expect(screen.getByText('正在加载场地详情…')).toBeDefined();
+});
 
 it('shows the latest 20 records when a venue has more than 20 reservations', async () => {
   const records: Reservation[] = Array.from({ length: 25 }, (_, index) => ({

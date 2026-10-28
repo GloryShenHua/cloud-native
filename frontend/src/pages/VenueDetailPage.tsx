@@ -10,7 +10,11 @@ import { formatTime, timeRange, todayIso } from '../lib/format';
 
 export function VenueDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const venueId = Number(id);
+  // 切换场地时重建页面状态，避免旧场地和预约表单在新地址下继续显示。
+  return <VenueDetailContent key={id} venueId={Number(id)} />;
+}
+
+function VenueDetailContent({ venueId }: { venueId: number }) {
   const toast = useToast();
 
   const [venue, setVenue] = useState<Venue | null>(null);
@@ -19,6 +23,11 @@ export function VenueDetailPage() {
   const [date, setDate] = useState(todayIso());
   const [slots, setSlots] = useState<Reservation[]>([]);
   const [recent, setRecent] = useState<Reservation[] | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(true);
+  const [slotsUnavailable, setSlotsUnavailable] = useState(false);
+  const [recentError, setRecentError] = useState<unknown>(null);
+  const [revision, setRevision] = useState(0);
+  const refreshReservations = () => setRevision((current) => current + 1);
   const [created, setCreated] = useState<Reservation | null>(null);
 
   const loadVenue = useCallback(async () => {
@@ -34,51 +43,42 @@ export function VenueDetailPage() {
     }
   }, [venueId]);
 
-  const loadSlots = useCallback(
-    async (targetDate: string) => {
-      if (!Number.isInteger(venueId) || venueId <= 0 || targetDate === '') {
-        setSlots([]);
-        return;
-      }
-      try {
-        const list = await api.listReservations({
-          venueId,
-          date: targetDate,
-          status: 'ACTIVE',
-          limit: 200,
-        });
-        setSlots(list);
-      } catch {
-        // 已占用时段仅作参考，加载失败不阻断预约流程。
-        setSlots([]);
-      }
-    },
-    [venueId],
-  );
-
-  const loadRecent = useCallback(async () => {
-    try {
-      const list = await api.listReservations({ venueId, limit: 20, order: 'DESC' });
-      setRecent(list);
-    } catch {
-      setRecent([]);
-    }
-  }, [venueId]);
-
   useEffect(() => {
-    if (!Number.isInteger(venueId) || venueId <= 0) {
+    if (!Number.isSafeInteger(venueId) || venueId <= 0) {
       setLoadError(new ApiError(400, 'INVALID_ARGUMENT', '场地编号无效'));
       setLoading(false);
       setRecent([]);
       return;
     }
     void loadVenue();
-    void loadRecent();
-  }, [venueId, loadVenue, loadRecent]);
+  }, [venueId, loadVenue]);
 
   useEffect(() => {
-    void loadSlots(date);
-  }, [date, loadSlots]);
+    let active = true;
+    setSlots([]);
+    setSlotsUnavailable(false);
+    if (!Number.isSafeInteger(venueId) || venueId <= 0 || date === '') {
+      setSlotsLoading(false);
+      return;
+    }
+    setSlotsLoading(true);
+    void api.listReservations({ venueId, date, status: 'ACTIVE', limit: 200 })
+      .then((list) => { if (active) setSlots(list); })
+      .catch(() => { if (active) setSlotsUnavailable(true); })
+      .finally(() => { if (active) setSlotsLoading(false); });
+    return () => { active = false; };
+  }, [venueId, date, revision]);
+
+  useEffect(() => {
+    if (!Number.isSafeInteger(venueId) || venueId <= 0) return;
+    let active = true;
+    setRecent(null);
+    setRecentError(null);
+    void api.listReservations({ venueId, limit: 20, order: 'DESC' })
+      .then((list) => { if (active) setRecent(list); })
+      .catch((error: unknown) => { if (active) setRecentError(error); });
+    return () => { active = false; };
+  }, [venueId, revision]);
 
   const errorInfo = loadError === null ? null : describeError(loadError);
 
@@ -208,6 +208,8 @@ export function VenueDetailPage() {
           date={date}
           onDateChange={setDate}
           bookedSlots={slots}
+          slotsLoading={slotsLoading}
+          slotsUnavailable={slotsUnavailable}
           onCreated={(reservation) => {
             setCreated(reservation);
             toast.push({
@@ -218,10 +220,9 @@ export function VenueDetailPage() {
                 reservation.endTime,
               )}`,
             });
-            void loadSlots(date);
-            void loadRecent();
+            refreshReservations();
           }}
-          onRefreshSlots={() => void loadSlots(date)}
+          onRefreshSlots={refreshReservations}
           onSubmitStart={() => setCreated(null)}
         />
 
@@ -233,7 +234,9 @@ export function VenueDetailPage() {
             </p>
           </div>
 
-          {recent === null ? (
+          {recentError !== null ? (
+            <ErrorBanner title="预约记录暂时无法加载" hint="请稍后重试。" onRetry={refreshReservations} />
+          ) : recent === null ? (
             <LoadingBlock label="正在加载…" />
           ) : recent.length === 0 ? (
             <EmptyState title="暂无预约记录" description="该场地还没有任何预约，创建第一条即可。" />

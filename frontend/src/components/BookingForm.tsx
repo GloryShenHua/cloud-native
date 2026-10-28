@@ -10,6 +10,8 @@ interface Props {
   onDateChange: (date: string) => void;
   /** 该场地当日的有效预约，仅作为时间参考；冲突判定仍由后端完成。 */
   bookedSlots: Reservation[];
+  slotsLoading?: boolean;
+  slotsUnavailable?: boolean;
   onCreated: (reservation: Reservation) => void;
   onRefreshSlots: () => void;
   /** 提交前通知父组件，用于收起上一次的成功提示。 */
@@ -35,6 +37,8 @@ export function BookingForm({
   date,
   onDateChange,
   bookedSlots,
+  slotsLoading = false,
+  slotsUnavailable = false,
   onCreated,
   onRefreshSlots,
   onSubmitStart,
@@ -208,7 +212,14 @@ export function BookingForm({
 
       <div className="slot-hint">
         <span className="slot-hint-title">当日已占用时段</span>
-        {bookedSlots.length === 0 ? (
+        {slotsLoading ? (
+          <span className="muted" role="status">正在加载占用时段…</span>
+        ) : slotsUnavailable ? (
+          <span role="status">
+            暂时无法加载占用时段，请刷新后确认。
+            <button type="button" className="button button--ghost button--sm" onClick={onRefreshSlots}>重试</button>
+          </span>
+        ) : bookedSlots.length === 0 ? (
           <span className="muted">暂无有效预约</span>
         ) : (
           <div className="slot-chips">

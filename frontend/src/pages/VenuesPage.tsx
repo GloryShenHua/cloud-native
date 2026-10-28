@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, api, describeError, fieldErrorsOf } from '../api/client';
 import type { CreateVenueInput, Venue, VenueStatus } from '../api/types';
@@ -20,17 +20,21 @@ export function VenuesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [showCreate, setShowCreate] = useState(false);
   const [page, setPage] = useState(1);
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const current = ++requestId.current;
     setLoading(true);
     try {
       const list = await api.listAllVenues();
+      if (current !== requestId.current) return;
       setVenues(list);
       setLoadError(null);
     } catch (error) {
+      if (current !== requestId.current) return;
       setLoadError(error);
     } finally {
-      setLoading(false);
+      if (current === requestId.current) setLoading(false);
     }
   }, []);
 
@@ -237,7 +241,11 @@ function CreateVenuePanel({ onCreated }: { onCreated: (venue: Venue) => void }) 
     if (values.name.trim() === '') next.name = '请填写场地名称';
     if (values.location.trim() === '') next.location = '请填写所在位置';
     if (!Number.isInteger(values.capacity) || values.capacity <= 0) next.capacity = '容纳人数需为正整数';
-    if (values.openingTime >= values.closingTime) next.closingTime = '关闭时间必须晚于开放时间';
+    if (values.openingTime === '') next.openingTime = '请选择开放时间';
+    if (values.closingTime === '') next.closingTime = '请选择关闭时间';
+    if (values.openingTime !== '' && values.closingTime !== '' && values.openingTime >= values.closingTime) {
+      next.closingTime = '关闭时间必须晚于开放时间';
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) {
       return;
@@ -324,8 +332,10 @@ function CreateVenuePanel({ onCreated }: { onCreated: (venue: Venue) => void }) 
           <input
             type="time"
             value={values.openingTime}
+            className={errors.openingTime === undefined ? '' : 'is-invalid'}
             onChange={(event) => update('openingTime', event.target.value)}
           />
+          {errors.openingTime === undefined ? null : <span className="field-error">{errors.openingTime}</span>}
         </label>
 
         <label className="field">

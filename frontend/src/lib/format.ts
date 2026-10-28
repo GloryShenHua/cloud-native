@@ -26,15 +26,3 @@ export function todayIso(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
-
-export function addDays(isoDate: string, days: number): string {
-  const date = new Date(`${isoDate}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-/** 把 HH:mm:ss 转成 HH:mm 的 input[type=time] 值。 */
-export function toTimeInputValue(value: string): string {
-  return formatTime(value);
-}

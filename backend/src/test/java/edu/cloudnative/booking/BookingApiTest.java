@@ -150,7 +150,7 @@ class BookingApiTest {
 
     @Test
     void invalidJsonFieldsAndQueryParametersReturn400() throws Exception {
-        for (String body : new String[]{"{}", "{", reservationPayload(1, "10:00", "11:00").replace("张同学", "   "),
+        for (String body : new String[]{"{}", "{", reservationPayload(1, "10:00", "11:00").replace("后端测试", "   "),
                 reservationPayload(1, "10:00", "11:00").replace("2026-11-01", "2026-02-30"),
                 reservationPayload(1, "10:00", "11:00").replace("\"venueId\":1", "\"venueId\":0"),
                 reservationPayload(1, "10:00", "11:00").replace("\"venueId\":1", "\"venueId\":\"one\""),
@@ -291,8 +291,8 @@ class BookingApiTest {
     }
 
     private String reservationPayload(long venueId, String start, String end) throws Exception {
-        return json.writeValueAsString(Map.of("venueId", venueId, "organizer", "张同学", "reservationDate", "2026-11-01",
-                "startTime", start, "endTime", end, "purpose", "小组讨论"));
+        return json.writeValueAsString(Map.of("venueId", venueId, "organizer", "后端测试", "reservationDate", "2026-11-01",
+                "startTime", start, "endTime", end, "purpose", "需求评审"));
     }
 
     private String venuePayload(String status, String opening, String closing) throws Exception {
