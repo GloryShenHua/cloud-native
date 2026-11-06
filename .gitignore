@@ -6,6 +6,9 @@
 .env
 .env.*
 !.env.example
+k8s/02-secret.yaml
+k8s/*secret.yaml
+!k8s/*secret.example.yaml
 *.log
 
 # Local lab requirements
