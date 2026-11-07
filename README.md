@@ -1,6 +1,6 @@
 # Cloud Native · 场地预约系统
 
-当前实现 Lab 1 的场地预约和 Docker 容器化，后续功能在同一仓库继续扩展。前端使用 React 和 TypeScript，后端使用 Java 21、Spring Boot 与 Spring JDBC，数据保存在 PostgreSQL 17。
+当前已实现 Lab 1 的场地预约、Docker 容器化，以及 Lab 2 的 Kubernetes 工作负载编排。前端使用 React 和 TypeScript，后端使用 Java 21、Spring Boot 与 Spring JDBC，数据保存在 PostgreSQL 17。
 
 支持场地查询与创建、预约查询与创建、取消预约，以及开放时间和预约冲突校验。
 
@@ -30,6 +30,32 @@ docker compose down            # 删除容器与网络，保留数据库 Volume
 ```
 
 `docker compose down -v` 会同时删除数据库数据，日常停止服务不使用该选项。更新代码后执行 `docker compose up --build -d --wait`。
+
+## Kubernetes 部署（Lab 2）
+
+Lab 2 将同一系统迁移到 Kubernetes，资源清单、环境要求与验收说明见 [k8s/README.md](k8s/README.md)。前置条件：已构建 `cloud-native-lab1-api:1.0.0`、`cloud-native-lab1-frontend:1.0.0` 镜像，且 `kubectl` 已连接到集群。
+
+```sh
+cp -n k8s/02-secret.example.yaml k8s/02-secret.yaml
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/01-configmap.yaml
+kubectl apply -f k8s/02-secret.yaml
+kubectl apply -f k8s/10-database.yaml
+kubectl apply -f k8s/20-api.yaml
+kubectl apply -f k8s/30-frontend.yaml
+kubectl apply -f k8s/40-daemonset.yaml
+kubectl rollout status deployment/api -n venue-booking
+kubectl rollout status deployment/frontend -n venue-booking
+```
+
+页面：<http://localhost:30080>。若集群不把 NodePort 映射到宿主机（如 kind / Docker Desktop kind 模式），先执行 `kubectl port-forward -n venue-booking svc/frontend 30080:80`。
+
+一键验收：
+
+```sh
+./k8s/scripts/verify-db-and-api.sh
+./k8s/scripts/verify-frontend-daemonset.sh
+```
 
 ## 运行结构
 

@@ -1,0 +1,11 @@
+﻿=== Lab 2 前端 /api 代理业务联调（经 NodePort/port-forward 30080） ===
+POST /api/venues -> 201 {"id":5,"name":"K8s联调会议室","location":"云原生实验楼 302","capacity":12,"openingTime":"08:00:00","closingTime":"22:00:00","status":"OPEN"}
+POST /api/reservations -> 201 {"id":1,"venueId":5,"organizer":"刘和鑫-K8s前端联调","reservationDate":"2026-11-20","startTime":"09:00:00","endTime":"11:00:00","purpose":"前端经 Nginx 代理创建预约","status":"ACTIVE"}
+POST /api/reservations (重复时段) -> 409 {"error":{"code":"RESERVATION_CONFLICT","message":"该场地在所选时间段已有有效预约","details":[]}}
+GET /api/reservations?venueId=5 -> 200 [{"id":1,"venueId":5,"organizer":"刘和鑫-K8s前端联调","reservationDate":"2026-11-20","startTime":"09:00:00","endTime":"11:00:00","purpose":"前端经 Nginx 代理创建预约","status":"ACTIVE"}]
+POST /api/reservations/1/cancel -> 200 {"id":1,"venueId":5,"organizer":"刘和鑫-K8s前端联调","reservationDate":"2026-11-20","startTime":"09:00:00","endTime":"11:00:00","purpose":"前端经 Nginx 代理创建预约","status":"CANCELLED"}
+取消后同一时段重新预约 -> 201 {"id":2,"venueId":5,"organizer":"刘和鑫-K8s前端联调","reservationDate":"2026-11-20","startTime":"09:00:00","endTime":"11:00:00","purpose":"前端经 Nginx 代理创建预约","status":"ACTIVE"}
+
+=== 浏览器 CORS 校验（Origin: http://127.0.0.1:30080） ===
+OPTIONS /api/venues -> 200，Access-Control-Allow-Origin: http://127.0.0.1:30080
+POST /api/venues（带 Origin） -> 201（临时数据已清理）

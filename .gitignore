@@ -13,4 +13,5 @@ k8s/*secret.yaml
 
 # Local lab requirements
 /云原生软件技术-Lab1-场地预约系统开发与Docker容器化.pdf
+/云原生软件技术-Lab2-场地预约系统Kubernetes工作负载编排.pdf
 

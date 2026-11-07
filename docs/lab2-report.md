@@ -17,6 +17,8 @@
 | **默认 StorageClass** | `local-path`（Provisioner: `rancher.io/local-path`，绑定模式：`WaitForFirstConsumer`） |
 | **镜像使用方式** | Colima Kubernetes 与宿主机 Docker 共享同一容器守护进程与本地镜像存储；本地通过 `docker build` 构建的镜像（如 `cloud-native-lab1-api:1.0.0`）配合 `imagePullPolicy: IfNotPresent` 直接被 Kubelet 拉起，无需导出 tar 包或推送至远程镜像仓库 |
 
+> 前端与 DaemonSet 模块另在本地 Docker Desktop Kubernetes `v1.36.1`（kind 模式，单节点）完成回归；该模式使用独立的 containerd 镜像存储且不把 NodePort 映射到宿主机，因此回归时通过 `docker save` + `ctr -n k8s.io images import` 导入镜像，并用 `kubectl port-forward` 访问前端。两种环境使用同一套资源清单，详见 §3.3。
+
 ### 1.2 集群节点、StorageClass 与命名空间资源证据
 
 执行 `kubectl version`、`kubectl get nodes -o wide`、`kubectl get storageclass` 及 `kubectl get all,pvc,cm,secret -n venue-booking` 的实际输出如下：
@@ -122,8 +124,8 @@ flowchart TB
 | **StatefulSet** | `database` | PostgreSQL 17 关系数据库（1 副本：`database-0`） | 数据库是典型的**有状态组件**，需要稳定的网络标识（`database-0`）、有序的部署/重建生命周期以及通过 `volumeClaimTemplates` 专属绑定的持久化存储卷 |
 | **Job** | *(待徐润杰补充：如 `venue-report-job`)* | 一次性场地利用率统计报告生成 | 报告统计属于**一次性批处理任务**，读取指定日期范围的有效预约、计算次数与累计时长并写入数据库后即正常退出（`Completed`），无需常驻运行 |
 | **CronJob** | *(待徐润杰补充：如 `venue-report-cron`)* | 定时场地利用率统计报告任务 | 周期性按计划（如每分钟演示 / 生产环境每日凌晨）自动创建 `Job` 执行统计逻辑 |
-| **DaemonSet** | *(待刘和鑫补充：如 `node-healthcheck`)* | 节点级 API 健康巡检任务 | 满足**集群中每个符合条件的节点都必须运行一个副本**的运维观测场景，在各节点本地定期探测 `api` 服务可达性并输出带节点名的巡检日志 |
-| **Service** | `database` (`ClusterIP`)<br/>`api` (`ClusterIP`)<br/>`frontend` | 数据库内部发现入口（`:5432`）<br/>API 内部负载均衡入口（`:8080`）<br/>前端浏览器访问入口 | 屏蔽 Pod 重建导致的临时 IP 变化，提供稳定的 DNS 名称（`database`、`api`）；`database` 和 `api` 仅用 `ClusterIP` 限制在集群内部通信，前端对外提供浏览器入口 |
+| **DaemonSet** | `node-api-healthcheck` | 节点级 API 健康巡检任务 | 满足**集群中每个符合条件的节点都必须运行一个副本**的运维观测场景，在各节点本地每 30 秒探测 `api` 服务可达性，并输出带节点名（`spec.nodeName`）、Pod 名与 UP/DOWN 状态的巡检日志 |
+| **Service** | `database` (`ClusterIP`)<br/>`api` (`ClusterIP`)<br/>`frontend` (`NodePort`) | 数据库内部发现入口（`:5432`）<br/>API 内部负载均衡入口（`:8080`）<br/>前端浏览器访问入口（`:30080`） | 屏蔽 Pod 重建导致的临时 IP 变化，提供稳定的 DNS 名称（`database`、`api`）；`database` 和 `api` 仅用 `ClusterIP` 限制在集群内部通信，前端通过 NodePort 30080 对外提供浏览器入口 |
 | **ConfigMap** | `booking-config` | 数据库地址/库名、服务端口、CORS 白名单、Spring Web 日志格式 | 将非敏感运行配置从容器镜像中解耦，支持修改配置后滚动重启生效，无需重新构建镜像 |
 | **Secret** | `booking-secret` | 数据库用户名（`DB_USERNAME`）与密码（`DB_PASSWORD`） | 独立存储敏感凭据，避免密码出现在代码、镜像或普通 `ConfigMap` 中；真实 `02-secret.yaml` 加入 `.gitignore`，仓库仅保留 `.example.yaml` 模板 |
 | **PVC** | `database-data-database-0` | PostgreSQL 数据目录（`/var/lib/postgresql/data`）持久化 | 由 `StatefulSet` 的 `volumeClaimTemplates` 自动通过 `local-path` StorageClass 动态创建（`1Gi`, `ReadWriteOnce`），保证 `database-0` Pod 删除重建后场地与预约数据不丢失 |
@@ -258,11 +260,91 @@ database-data-database-0   Bound    pvc-a08a482c-dfc1-47ab-81a2-2e06a67236b1   1
 
 ---
 
-### 3.3 前端业务流程与节点巡检 `DaemonSet` 验证结果（待刘和鑫补充）
+### 3.3 前端业务流程与节点巡检 `DaemonSet` 验证结果（刘和鑫）
 
-> *TODO（刘和鑫）：在此处补充：*
-> 1. *从浏览器访问 K8s 中的前端 Service，跑通场地列表与详情、创建场地、创建预约与冲突提示、查询与取消预约的记录/截图；*
-> 2. *节点巡检 `DaemonSet` 的 YAML 说明、`kubectl get ds,pod -o wide` 分布截图及 `kubectl logs` 巡检日志输出。*
+> **验证环境说明**：小组主集群为 Colima 内置 K3s；前端与 DaemonSet 模块另在本地 Docker Desktop Kubernetes `v1.36.1`（kind 模式，单节点 `desktop-control-plane`）完成回归，使用同一套 `k8s/30-frontend.yaml` 与 `k8s/40-daemonset.yaml`。Docker Desktop 的 kind 模式不把 NodePort 直接映射到宿主机，因此本节部分命令使用 `kubectl port-forward`；在 Colima 环境可通过节点地址访问 NodePort，或同样使用 `kubectl port-forward`。
+
+#### （1）前端 `Deployment` 与 `NodePort Service`
+
+`k8s/30-frontend.yaml` 将前端定义为 2 副本 `Deployment`，镜像沿用 Lab 1 的 `cloud-native-lab1-frontend:1.0.0`，通过环境变量 `API_UPSTREAM=api:8080`、`API_BASE_URL=/api` 复用 Nginx 模板与运行时配置脚本。`Service` 使用 `NodePort 30080`，与 `booking-config` 中 CORS 白名单的 `http://localhost:30080` 对应。
+
+```text
+$ kubectl get deployment,pod,service -n venue-booking -l app=frontend -o wide
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES
+deployment.apps/frontend   2/2     2            2           7m12s frontend     cloud-native-lab1-frontend:1.0.0
+
+NAME                           READY   STATUS    RESTARTS   AGE   IP            NODE
+pod/frontend-6cdc697d8-2fh9t   1/1     Running   0          7m12s 10.244.0.8    desktop-control-plane
+pod/frontend-6cdc697d8-2vwlv   1/1     Running   0          7m12s 10.244.0.9    desktop-control-plane
+
+NAME               TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
+service/frontend   NodePort   10.96.53.156   <none>        80:30080/TCP   7m12s
+```
+
+```text
+$ curl http://127.0.0.1:30080/healthz
+ok
+$ curl http://127.0.0.1:30080/config.js
+window.__APP_CONFIG__ = { apiBaseUrl: "/api" };
+$ curl http://127.0.0.1:30080/api/venues?limit=2
+[{"id":1,"name":"第一会议室",...},{"id":2,"name":"篮球场",...}]
+```
+
+`/api/venues` 返回的是经 Nginx `proxy_pass http://api:8080` 转发后的真实后端数据，说明浏览器只访问前端 `Service`，前后端之间通过集群内 `api` `Service` 通信，没有使用临时 Pod IP。
+
+#### （2）前端页面与业务用例
+
+浏览器通过 `kubectl port-forward -n venue-booking service/frontend 30080:80` 访问 `http://127.0.0.1:30080`，页面由 K8s 中的 frontend Pod 提供，接口由 Nginx 反向代理到 2 个 API Pod。依次验证 Lab 1 要求的五类业务：
+
+| 用例 | 操作 | 结果 |
+|---|---|---|
+| 查询场地列表与详情 | 打开 `/`、`/venues/5` | 正常显示 4 个场地及详情、近期预约 |
+| 创建场地 | `POST /api/venues` | `201 Created`，返回 `id=5` |
+| 创建预约并检查冲突 | 同一场地/日期/时段连续两次 `POST /api/reservations` | 第 1 次 `201`，第 2 次 `409 RESERVATION_CONFLICT` |
+| 查询预约记录 | `GET /api/reservations?venueId=5` | `200`，返回 `ACTIVE` 记录 |
+| 取消预约 | `POST /api/reservations/1/cancel` | `200`，状态变为 `CANCELLED`；同一时段可再次预约成功 `201` |
+
+```text
+POST /api/venues -> 201 {"id":5,...}
+POST /api/reservations -> 201 {"id":1,...,"status":"ACTIVE"}
+POST /api/reservations (重复时段) -> 409 {"error":{"code":"RESERVATION_CONFLICT",...}}
+GET /api/reservations?venueId=5 -> 200 [{"id":1,...,"status":"ACTIVE"}]
+POST /api/reservations/1/cancel -> 200 {"id":1,...,"status":"CANCELLED"}
+取消后同一时段重新预约 -> 201 {"id":2,...,"status":"ACTIVE"}
+```
+
+此外，模拟浏览器携带 `Origin: http://127.0.0.1:30080` 的预检请求返回 `200` 且 `Access-Control-Allow-Origin` 正确，带 Origin 的 `POST /api/venues` 返回 `201`，说明通过 30080 端口访问时浏览器表单提交不会被 CORS 拦截。
+
+![图 3-1 前端场地列表（由 K8s frontend Pod 提供）](screenshots/lab2/01-venues.png)
+
+![图 3-2 场地详情与创建预约表单](screenshots/lab2/02-venue-detail.png)
+
+![图 3-3 预约记录（含已取消与有效记录）](screenshots/lab2/03-reservations.png)
+
+#### （3）节点巡检 `DaemonSet`
+
+`k8s/40-daemonset.yaml` 定义 `node-api-healthcheck`，每个节点一个 Pod，每 30 秒请求 `http://api:8080/actuator/health`，并通过 Downward API 注入 `spec.nodeName` 与 Pod 名。对控制平面节点显式增加 toleration，保证单节点 kind 集群也能调度。
+
+```text
+$ kubectl get daemonset node-api-healthcheck -n venue-booking
+NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR
+node-api-healthcheck   1         1         1       1            1           <none>
+
+$ kubectl get pods -l app=node-api-healthcheck -o wide
+NAME                         READY   STATUS    RESTARTS   AGE   IP            NODE
+node-api-healthcheck-xdl72   1/1     Running   0          3m41s   10.244.0.15   desktop-control-plane
+```
+
+```text
+$ kubectl logs -l app=node-api-healthcheck --tail=10 --prefix
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] healthcheck started; target=http://api:8080/actuator/health
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:48:47Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:49:17Z status=UP
+```
+
+**验证结论**：前端 `Deployment` 的 2 个副本均处于 `Running`，`frontend` `Service` 通过 `NodePort 30080` 暴露，`/healthz`、`/config.js`、`/api/venues` 和 SPA 首页均正常；业务接口经 Nginx 代理完成了场地查询、创建场地、创建预约、冲突校验、查询预约和取消预约的完整流程。`node-api-healthcheck` 在单节点集群的 `desiredNumberScheduled` 与 `numberReady` 均为 1，巡检日志持续输出节点名、Pod 名和 `status=UP`，满足“每个节点运行一个副本”的 DaemonSet 要求。
+
+完整命令输出见 [lab2-frontend-verification.txt](lab2-frontend-verification.txt) 与 [lab2-frontend-api-flow.txt](lab2-frontend-api-flow.txt)。
 
 ---
 
@@ -282,7 +364,7 @@ database-data-database-0   Bound    pvc-a08a482c-dfc1-47ab-81a2-2e06a67236b1   1
 | 成员 | 负责内容 | 交付物与验证记录 |
 |---|---|---|
 | **施钧凯** | **集群、数据库和 API 编排**：负责 K8s 集群搭建与本地镜像导入，部署 PostgreSQL `StatefulSet`、`PVC` 和内部 `Service`；用 `ConfigMap` 管理普通配置，用 `Secret` 注入数据库凭据；部署 API `Deployment`（2 副本）并通过同一 `Service` 访问 | `k8s/00-namespace.yaml`、`k8s/01-configmap.yaml`、`k8s/02-secret.example.yaml`、`k8s/10-database.yaml`、`k8s/20-api.yaml`、`k8s/scripts/verify-db-and-api.sh`、`k8s/README.md`；完成数据库 Pod 重建持久化验证与双 API Pod 负载均衡及并发冲突压测 |
-| **刘和鑫** | **前端部署、DaemonSet、业务联调**：编写前端 `Deployment` 和 `Service`，沿用 Nginx `/api` 代理；编写节点巡检 `DaemonSet` 定期检查 API 可达性并记录节点名与检查结果 | *(待合入前端与 DaemonSet YAML 清单及验证记录)* |
+| **刘和鑫** | **前端部署、DaemonSet、业务联调**：编写前端 `Deployment` 和 `Service`，沿用 Nginx `/api` 代理；编写节点巡检 `DaemonSet` 定期检查 API 可达性并记录节点名与检查结果 | `k8s/30-frontend.yaml`、`k8s/40-daemonset.yaml`、`k8s/scripts/verify-frontend-daemonset.sh`；完成前端 2 副本与 NodePort 访问、`/api` 反向代理、DaemonSet 节点覆盖验证（验证记录见 §3.3） |
 | **徐润杰** | **场地利用率报告、Job 和 CronJob**：编写按日期范围汇总各场地有效预约次数和累计预约时长的统计逻辑，通过 `Job` 手动执行、`CronJob` 定时执行并将结果存入 PostgreSQL | *(待合入报告统计代码、Job/CronJob YAML 清单及验证记录)* |
 
 ### 4.2 实践中遇到的问题与解决过程
@@ -296,3 +378,7 @@ database-data-database-0   Bound    pvc-a08a482c-dfc1-47ab-81a2-2e06a67236b1   1
 3. **长连接复用导致单客户端连续请求偏向同一 Pod 副本**
    - **现象**：Kubernetes `ClusterIP` Service 默认基于 iptables/IPVS 在**新 TCP 连接建立（SYN）时**进行负载均衡。若压测客户端复用同一个 HTTP Keep-Alive 长连接发送 20 次请求，所有请求都会落在同一个后端 Pod 上。
    - **解决**：在验证脚本的请求头中显式携带 `Connection: close`，使每次请求建立独立 TCP 短连接，从而准确触发 kube-proxy 在两个 API Pod 端点之间的负载均衡分发。
+4. **Docker Desktop kind 模式的镜像不可见与 NodePort 不映射**
+   - **现象**：在本地 Docker Desktop Kubernetes 上 `kubectl apply` 后，API 与前端 Pod 进入 `ImagePullBackOff`；同时 `kubectl get svc` 虽然显示了 `NodePort 30080`，但在 Windows 宿主机访问 `http://localhost:30080` 不通。
+   - **原因**：Docker Desktop 的 Kubernetes（kind 模式）使用独立的 containerd 镜像存储，不会自动看到 `docker build` 生成的镜像；该模式也不会把 NodePort 映射到宿主机。
+   - **解决**：用 `docker save` 导出镜像，通过临时特权 Pod 挂载节点根目录后执行 `ctr -n k8s.io images import` 导入节点；访问前端时使用 `kubectl port-forward -n venue-booking service/frontend 30080:80`，并保持 30080 与 `booking-config` 的 CORS 白名单一致。Colima/K3s 环境与宿主机 Docker 共享镜像存储，不需要这两步。

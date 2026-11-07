@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: venue-booking
+  labels:
+    app: frontend
+    app.kubernetes.io/part-of: venue-booking-system
+spec:
+  # 浏览器从集群外访问前端，因此使用 NodePort；30080 已在 booking-config 的 CORS 白名单中。
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30080
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: venue-booking
+  labels:
+    app: frontend
+    app.kubernetes.io/part-of: venue-booking-system
+spec:
+  # Nginx + React 静态资源完全无状态，可多副本水平扩展。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        app.kubernetes.io/part-of: venue-booking-system
+    spec:
+      containers:
+        - name: frontend
+          image: cloud-native-lab1-frontend:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          env:
+            # 容器启动时由 Nginx 模板把 /api 反向代理到集群内的 api Service。
+            - name: API_UPSTREAM
+              value: "api:8080"
+            # 写入 config.js，浏览器始终请求同源 /api，不需要跨域。
+            - name: API_BASE_URL
+              value: "/api"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 10

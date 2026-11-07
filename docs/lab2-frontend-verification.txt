@@ -1,0 +1,53 @@
+=== 1. 检查集群与前置资源 ===
+NAME                    STATUS   ROLES           AGE     VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION                             CONTAINER-RUNTIME
+desktop-control-plane   Ready    control-plane   7m43s   v1.36.1   172.18.0.2    <none>        Debian GNU/Linux 13 (trixie)   6.6.87.2-microsoft-standard-WSL2 (amd64)   containerd://2.3.1
+
+=== 2. 部署前端 Deployment (2 副本) + NodePort Service ===
+service/frontend unchanged
+deployment.apps/frontend unchanged
+deployment "frontend" successfully rolled out
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                             SELECTOR
+deployment.apps/frontend   2/2     2            2           7m12s   frontend     cloud-native-lab1-frontend:1.0.0   app=frontend
+
+NAME                           READY   STATUS    RESTARTS   AGE     IP           NODE                    NOMINATED NODE   READINESS GATES
+pod/frontend-6cdc697d8-2fh9t   1/1     Running   0          7m12s   10.244.0.8   desktop-control-plane   <none>           <none>
+pod/frontend-6cdc697d8-2vwlv   1/1     Running   0          7m12s   10.244.0.9   desktop-control-plane   <none>           <none>
+
+NAME               TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE     SELECTOR
+service/frontend   NodePort   10.96.53.156   <none>        80:30080/TCP   7m12s   app=frontend
+
+=== 3. 部署节点巡检 DaemonSet ===
+daemonset.apps/node-api-healthcheck unchanged
+daemon set "node-api-healthcheck" successfully rolled out
+NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE     CONTAINERS    IMAGES         SELECTOR
+node-api-healthcheck   1         1         1       1            1           <none>          7m12s   healthcheck   busybox:1.36   app=node-api-healthcheck
+NAME                         READY   STATUS    RESTARTS   AGE     IP            NODE                    NOMINATED NODE   READINESS GATES
+node-api-healthcheck-xdl72   1/1     Running   0          3m41s   10.244.0.15   desktop-control-plane   <none>           <none>
+
+=== 4. 验证前端页面与 /api 反向代理 ===
+[info] NodePort 30080 不可直接访问，改用 kubectl port-forward 30080:80（保持与 CORS 白名单一致的 30080）
+GET http://127.0.0.1:30080/healthz -> ok
+GET http://127.0.0.1:30080/config.js -> window.__APP_CONFIG__ = { apiBaseUrl: "/api" };
+GET http://127.0.0.1:30080/api/venues?limit=2 ->
+[{"id":1,"name":"第一会议室","location":"教学楼 A101","capacity":20,"openingTime":"08:00:00","closingTime":"22:00:00","status":"OPEN"},{"id":2,"name":"篮球场","location":"体育中心东侧","capacity":30,"openingTime":"09:00:00","closingTime":"21:00:00","status":"OPEN"}]
+SPA index.html OK
+
+=== 5. 验证 DaemonSet 覆盖所有可调度节点 ===
+desiredNumberScheduled=1 numberReady=1 集群节点数=1
+
+=== 6. 巡检日志（每个节点一个 Pod，输出节点名与 API 状态）===
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] healthcheck started; target=http://api:8080/actuator/health
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:48:47Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:49:17Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:49:47Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:50:17Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:50:47Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:51:17Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:51:47Z status=UP
+[pod/node-api-healthcheck-xdl72/healthcheck] [node=desktop-control-plane] [pod=node-api-healthcheck-xdl72] 2026-11-07T08:52:17Z status=UP
+
+=== 验收结论 ===
+- 前端 Deployment 2 副本已就绪，Service frontend (NodePort 30080) 已创建。
+- 当前访问地址：http://127.0.0.1:30080（NodePort 不可达时脚本自动使用 port-forward）。
+- 浏览器打开 http://127.0.0.1:30080 可跑通场地/预约流程，/api 由 Nginx 代理到 api:8080。
+- DaemonSet 在 1 个可调度节点上运行，巡检日志持续输出 status=UP/DOWN。
