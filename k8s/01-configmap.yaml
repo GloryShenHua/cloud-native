@@ -11,6 +11,8 @@ data:
   DB_PORT: "5432"
   DB_URL: "jdbc:postgresql://database:5432/venue_booking"
   SERVER_PORT: "8080"
+  # HTTP 入口保留 Host 中的端口，避免 Tomcat 按 X-Forwarded-Proto 把端口重置为 80。
+  SERVER_FORWARD_HEADERS_STRATEGY: "none"
   CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:30080,http://127.0.0.1:30080"
   # 开启 Spring MVC Web 请求日志并包含容器实例名 (${HOSTNAME})，用于证明多副本负载均衡
   LOGGING_LEVEL_WEB: "DEBUG"

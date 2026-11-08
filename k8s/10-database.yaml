@@ -16,6 +16,23 @@ spec:
       targetPort: 5432
       protocol: TCP
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-headless
+  namespace: venue-booking
+  labels:
+    app: database
+    app.kubernetes.io/part-of: venue-booking-system
+spec:
+  clusterIP: None
+  selector:
+    app: database
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -25,7 +42,7 @@ metadata:
     app: database
     app.kubernetes.io/part-of: venue-booking-system
 spec:
-  serviceName: database
+  serviceName: database-headless
   replicas: 1
   selector:
     matchLabels:
@@ -69,7 +86,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                - pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
@@ -79,7 +96,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                - pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5

@@ -37,9 +37,9 @@ Compose 会重新创建配置发生变化的容器；只执行 `restart` 不会�
 
 ## 浏览器来源与 CORS
 
-浏览器对 POST 请求携带的 `Origin` 会经过 Nginx 转发到后端。`http://localhost:5173` 和 `http://127.0.0.1:5173` 是不同来源，应分别加入白名单。
+浏览器对 POST 请求携带的 `Origin` 会经过 Nginx 转发到后端。Nginx 同时保留完整的 `Host`（含端口）。Kubernetes 的 HTTP 部署显式使用 `SERVER_FORWARD_HEADERS_STRATEGY=none`，让后端按实际访问地址判断同源。
 
-根目录 Compose 默认允许两个 5173 地址及 `http://localhost:3000`。单独使用 `backend/compose.yaml` 时，默认仅允许 localhost 的 5173 和 3000；实际访问地址不同时，应配置 `CORS_ALLOWED_ORIGINS` 并重新创建 API 容器。
+跨域直连时，`http://localhost:5173` 和 `http://127.0.0.1:5173` 是两个不同来源。根据实际浏览器地址配置 `CORS_ALLOWED_ORIGINS` 并重新创建 API 容器。
 
 403 的页面提示为“暂时无法提交”。具体原因通过浏览器网络面板与 API 日志排查，页面不显示环境变量名和服务内部信息。
 

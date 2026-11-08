@@ -1,0 +1,138 @@
+2026-11-08 双节点 kind 集成验证（命令输出节选，Job 日志中的 Z 表示 UTC）
+Client Version: v1.36.1
+Kustomize Version: v5.8.1
+Server Version: v1.35.0
+NAME                             STATUS   ROLES           AGE     VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION    CONTAINER-RUNTIME
+venue-lab2-audit-control-plane   Ready    control-plane   6m43s   v1.35.0   172.24.0.3    <none>        Debian GNU/Linux 12 (bookworm)   7.0.14-linuxkit   containerd://2.2.0
+venue-lab2-audit-worker          Ready    <none>          6m29s   v1.35.0   172.24.0.2    <none>        Debian GNU/Linux 12 (bookworm)   7.0.14-linuxkit   containerd://2.2.0
+NAME                 PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+standard (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   false                  6m40s
+
+旧版 StatefulSet 与 Flyway 升级
+旧镜像 Flyway 版本：
+1
+2
+旧预约升级前 -> 后：1|4|ACTIVE -> 1|4|ACTIVE；PVC UID 保持 42fa1c9a-478d-4db7-bc18-e2591acfb4f9；业务 ClusterIP 保持 10.96.250.57
+更新 API 镜像后 Flyway 版本：
+1
+2
+3
+venue_usage_reports
+
+verify-db-and-api.sh
+创建响应: {"id":4,"venueId":6,"organizer":"K8s验收","reservationDate":"2026-11-15","startTime":"09:00:00","endTime":"11:00:00","purpose":"验证数据库持久化","status":"ACTIVE"}
+Pod UID: 38e73263-a5fa-4a26-b3b3-c262bb107634 -> 673b3f6a-2047-4dc9-a6a4-fc5179ef94d5; PVC UID: 42fa1c9a-478d-4db7-bc18-e2591acfb4f9
+database-0.database-headless:5432 - accepting connections
+重建后查询响应: {"id":4,"venueId":6,"organizer":"K8s验收","reservationDate":"2026-11-15","startTime":"09:00:00","endTime":"11:00:00","purpose":"验证数据库持久化","status":"ACTIVE"}
+[6.1] 顺序短连接请求验证 (20 次请求，批次标识 lab2-1794117991-26464)...
+并发 HTTP 状态计数：
+   1 201
+   9 409
+本批 20 次查询的 API Pod 命中数：
+   8 [pod=api-766f4d84b6-2dp5w]
+  12 [pod=api-766f4d84b6-78jcv]
+本批 10 次并发预约的 API Pod 命中数：
+   3 [pod=api-766f4d84b6-2dp5w]
+   7 [pod=api-766f4d84b6-78jcv]
+PASS 数据库重建、PVC 保留、API 多副本与并发冲突
+
+PF_PORT=31080 verify-frontend-daemonset.sh
+[info] NodePort 30080 不可直接访问，改用 kubectl port-forward 31080:80
+GET http://127.0.0.1:31080/healthz -> ok
+GET http://127.0.0.1:31080/config.js -> window.__APP_CONFIG__ = { apiBaseUrl: "/api" };
+SPA index.html OK
+经 http://127.0.0.1:31080 验证场地列表和详情、创建场地、预约、冲突、查询与取消：
+{"result": "PASS", "venueId": 7, "cancelledReservationId": 6, "persistentReservationId": 7}
+desiredNumberScheduled=2 numberReady=2 集群节点数=2
+[pod/node-api-healthcheck-9bwd5/healthcheck] [node=venue-lab2-audit-control-plane] [pod=node-api-healthcheck-9bwd5] 2026-11-08T06:06:34Z status=DOWN
+[pod/node-api-healthcheck-9bwd5/healthcheck] [node=venue-lab2-audit-control-plane] [pod=node-api-healthcheck-9bwd5] 2026-11-08T06:07:09Z status=UP
+[pod/node-api-healthcheck-txzzk/healthcheck] [node=venue-lab2-audit-worker] [pod=node-api-healthcheck-txzzk] 2026-11-08T06:06:34Z status=DOWN
+[pod/node-api-healthcheck-txzzk/healthcheck] [node=venue-lab2-audit-worker] [pod=node-api-healthcheck-txzzk] 2026-11-08T06:07:09Z status=UP
+
+PASS 前端同源代理完整业务流程，2 个符合条件的节点各有一个巡检 Pod，API 状态为 UP
+verify-venue-usage-report.sh
+venue-usage-report-cron   0 2 * * *   Asia/Shanghai   False     0        <none>          4m1s
+测试场地 8（有预约）与 9（零预约），手动区间 2026-11-06 至 2026-11-07
+job.batch/report-manual-1794118032-26635 created
+job.batch/report-invalid-1794118032-26635 created
+cronjob.batch/report-demo-1794118032-26635 created
+job.batch/report-manual-1794118032-26635 condition met
+JOB                              START                  END                    CONDITIONS
+report-manual-1794118032-26635   2026-11-08T06:07:12Z   2026-11-08T06:07:14Z   SuccessCriteriaMet,Complete
+job=report-manual-1794118032-26635 uid=6890944a-c6dc-4f2a-b816-afb684be69ca status=started at=2026-11-08T06:07:12Z
+job=report-manual-1794118032-26635 status=succeeded at=2026-11-08T06:07:12Z
+2026-11-06|2026-11-07|2026-11-07|2|5400|0|0
+INSERT 0 0
+job.batch/report-invalid-1794118032-26635 condition met
+JOB                               START                  END      CONDITIONS
+report-invalid-1794118032-26635   2026-11-08T06:07:12Z   <none>   FailureTarget,Failed
+job=report-invalid-1794118032-26635 uid=51575cfc-5052-4153-b98f-410703725e3a status=started at=2026-11-08T06:07:12Z
+psql:/report/venue-usage.sql:23: ERROR:  new row for relation "venue_usage_reports" violates check constraint "valid_venue_usage_report_dates"
+job=report-invalid-1794118032-26635 status=failed at=2026-11-08T06:07:12Z
+cronjob.batch/report-demo-1794118032-26635 condition met
+job.batch/report-demo-1794118032-26635-29901968 condition met
+JOB                                     START                  END                    CONDITIONS
+report-demo-1794118032-26635-29901968   2026-11-08T06:08:00Z   2026-11-08T06:08:03Z   SuccessCriteriaMet,Complete
+job=report-demo-1794118032-26635-29901968 uid=7fccc116-dfb3-4a27-8524-9768c233ba58 status=started at=2026-11-08T06:08:00Z
+job=report-demo-1794118032-26635-29901968 status=succeeded at=2026-11-08T06:08:00Z
+CronJob/report-demo-1794118032-26635
+2026-11-07|2026-11-07|2026-11-07|1|1800|0|0
+venue-usage-report-cron   0 2 * * *   Asia/Shanghai   False     0        <none>          4m52s
+PASS 手动 Job、重复执行、失败状态与 CronJob 自动调度
+
+报告落库后重建 PostgreSQL 与最终资源
+pod "database-0" deleted from venue-booking namespace
+pod/database-0 condition met
+pod/database-0 condition met
+数据库 Pod 重建后报告内容逐字段一致，报告数 2
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                             SELECTOR
+deployment.apps/api        2/2     2            2           8m15s   api          cloud-native-lab1-api:1.0.0        app=api
+deployment.apps/frontend   2/2     2            2           4m47s   frontend     cloud-native-lab1-frontend:1.0.0   app=frontend
+
+NAME                        READY   AGE    CONTAINERS   IMAGES
+statefulset.apps/database   1/1     8m2s   postgres     postgres:17-alpine
+
+NAME                                  DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE     CONTAINERS    IMAGES         SELECTOR
+daemonset.apps/node-api-healthcheck   2         2         2       2            2           <none>          4m39s   healthcheck   busybox:1.36   app=node-api-healthcheck
+
+NAME                                              STATUS     COMPLETIONS   DURATION   AGE   CONTAINERS   IMAGES               SELECTOR
+job.batch/report-demo-1794118032-26635-29901968   Complete   1/1           3s         11s   report       postgres:17-alpine   batch.kubernetes.io/controller-uid=7fccc116-dfb3-4a27-8524-9768c233ba58
+job.batch/report-invalid-1794118032-26635         Failed     0/1           59s        59s   report       postgres:17-alpine   batch.kubernetes.io/controller-uid=51575cfc-5052-4153-b98f-410703725e3a
+job.batch/report-manual-1794118032-26635          Complete   1/1           2s         59s   report       postgres:17-alpine   batch.kubernetes.io/controller-uid=6890944a-c6dc-4f2a-b816-afb684be69ca
+
+NAME                                    SCHEDULE    TIMEZONE        SUSPEND   ACTIVE   LAST SCHEDULE   AGE   CONTAINERS   IMAGES               SELECTOR
+cronjob.batch/venue-usage-report-cron   0 2 * * *   Asia/Shanghai   False     0        <none>          5m    report       postgres:17-alpine   <none>
+
+NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE     SELECTOR
+service/api                 ClusterIP   10.96.94.229    <none>        8080/TCP       8m15s   app=api
+service/database            ClusterIP   10.96.250.57    <none>        5432/TCP       8m27s   app=database
+service/database-headless   ClusterIP   None            <none>        5432/TCP       8m2s    app=database
+service/frontend            NodePort    10.96.104.200   <none>        80:30080/TCP   4m47s   app=frontend
+
+NAME                                             STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE     VOLUMEMODE
+persistentvolumeclaim/database-data-database-0   Bound    pvc-42fa1c9a-478d-4db7-bc18-e2591acfb4f9   1Gi        RWO            standard       <unset>                 8m27s   Filesystem
+
+NAME                               DATA   AGE
+configmap/booking-config           9      8m27s
+configmap/kube-root-ca.crt         1      8m27s
+configmap/venue-usage-report-sql   1      5m
+
+NAME                    TYPE     DATA   AGE
+secret/booking-secret   Opaque   2      8m27s
+
+Lab 1 回归
+{"result": "PASS", "venueId": 4, "cancelledReservationId": 1, "persistentReservationId": 2}
+{"result": "PASS", "venueId": 5, "cancelledReservationId": 3, "persistentReservationId": 4}
+未授权跨域 POST：HTTP 403
+[INFO] Tests run: 29, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+首次部署与 NodePort 复验
+secret/booking-secret created
+service/database-headless created
+cronjob.batch/venue-usage-report-cron created
+job.batch/report-empty-install created
+job.batch/report-empty-install condition met
+PASS 按 README 首次安装和空预约报告（场地数|预约数|累计秒） 3|0|0
+从 kind Docker 网络访问节点 NodePort http://172.24.0.2:30080
+{"result": "PASS", "venueId": 4, "cancelledReservationId": 1, "persistentReservationId": 2}

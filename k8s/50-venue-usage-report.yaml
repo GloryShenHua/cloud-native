@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: venue-usage-report-cron
+  namespace: venue-booking
+  labels:
+    app.kubernetes.io/part-of: venue-booking-system
+spec:
+  schedule: "0 2 * * *"
+  timeZone: Asia/Shanghai
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 120
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: venue-usage-report
+            app.kubernetes.io/part-of: venue-booking-system
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          containers:
+            - name: report
+              image: postgres:17-alpine
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: booking-config
+                - secretRef:
+                    name: booking-secret
+              env:
+                - name: PGCONNECT_TIMEOUT
+                  value: "5"
+                - name: REPORT_START_DATE
+                  value: ""
+                - name: REPORT_END_DATE
+                  value: ""
+                - name: REPORT_JOB_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['batch.kubernetes.io/job-name']
+                - name: REPORT_JOB_UID
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['batch.kubernetes.io/controller-uid']
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  export PGHOST="$DB_HOST" PGPORT="$DB_PORT" PGDATABASE="$DB_NAME"
+                  export PGUSER="$DB_USERNAME" PGPASSWORD="$DB_PASSWORD"
+                  printf 'job=%s uid=%s status=started at=%s\n' "$REPORT_JOB_NAME" "$REPORT_JOB_UID" "$(date -u +%FT%TZ)"
+                  if psql -X --set=ON_ERROR_STOP=1 \
+                    --set=job_uid="$REPORT_JOB_UID" --set=job_name="$REPORT_JOB_NAME" \
+                    --set=start_date="$REPORT_START_DATE" --set=end_date="$REPORT_END_DATE" \
+                    --file=/report/venue-usage.sql; then
+                    printf 'job=%s status=succeeded at=%s\n' "$REPORT_JOB_NAME" "$(date -u +%FT%TZ)"
+                  else
+                    status=$?
+                    printf 'job=%s status=failed at=%s\n' "$REPORT_JOB_NAME" "$(date -u +%FT%TZ)" >&2
+                    exit "$status"
+                  fi
+              volumeMounts:
+                - name: report-sql
+                  mountPath: /report
+                  readOnly: true
+          volumes:
+            - name: report-sql
+              configMap:
+                name: venue-usage-report-sql

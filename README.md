@@ -33,28 +33,18 @@ docker compose down            # 删除容器与网络，保留数据库 Volume
 
 ## Kubernetes 部署（Lab 2）
 
-Lab 2 将同一系统迁移到 Kubernetes，资源清单、环境要求与验收说明见 [k8s/README.md](k8s/README.md)。前置条件：已构建 `cloud-native-lab1-api:1.0.0`、`cloud-native-lab1-frontend:1.0.0` 镜像，且 `kubectl` 已连接到集群。
-
-```sh
-cp -n k8s/02-secret.example.yaml k8s/02-secret.yaml
-kubectl apply -f k8s/00-namespace.yaml
-kubectl apply -f k8s/01-configmap.yaml
-kubectl apply -f k8s/02-secret.yaml
-kubectl apply -f k8s/10-database.yaml
-kubectl apply -f k8s/20-api.yaml
-kubectl apply -f k8s/30-frontend.yaml
-kubectl apply -f k8s/40-daemonset.yaml
-kubectl rollout status deployment/api -n venue-booking
-kubectl rollout status deployment/frontend -n venue-booking
-```
+按 [Kubernetes 部署说明](k8s/README.md) 构建并导入 API 与前端镜像，再依次部署配置、数据库、API、前端、节点巡检与报告任务。旧版 Lab 2 数据库的保留数据升级步骤也在同一说明中。
 
 页面：<http://localhost:30080>。若集群不把 NodePort 映射到宿主机（如 kind / Docker Desktop kind 模式），先执行 `kubectl port-forward -n venue-booking svc/frontend 30080:80`。
 
-一键验收：
+场地利用率报告支持手动 Job 和每日 CronJob，统计结果存入 PostgreSQL。[报告触发与查询](k8s/README.md#34-场地利用率报告)
+
+在实验集群完成部署后，可以运行三个验收脚本。脚本会写入演示记录，数据库验收期间会重建数据库 Pod。
 
 ```sh
 ./k8s/scripts/verify-db-and-api.sh
 ./k8s/scripts/verify-frontend-daemonset.sh
+./k8s/scripts/verify-venue-usage-report.sh
 ```
 
 ## 运行结构
@@ -82,7 +72,7 @@ kubectl rollout status deployment/frontend -n venue-booking
 | `CORS_ALLOWED_ORIGINS` | localhost:5173、127.0.0.1:5173、localhost:3000 对应的 HTTP origin | 后端接受的浏览器访问来源，逗号分隔 |
 | `API_BASE_URL` | `/api` | 浏览器使用的 API 基础路径，前端启动时写入 `config.js` |
 
-修改端口后，应同步调整 `CORS_ALLOWED_ORIGINS`。即使经过同源代理，浏览器 POST 请求携带的 Origin 仍可能被后端校验。修改 `.env` 后用 `docker compose up -d` 重新创建受影响容器；单纯 `restart` 不会重新读取 Compose 环境变量。
+Nginx 同源代理会保留浏览器访问的主机与端口。使用跨域直连时，将实际前端来源加入 `CORS_ALLOWED_ORIGINS`。修改 `.env` 后用 `docker compose up -d` 重新创建受影响容器。
 
 ## 接口与字段
 

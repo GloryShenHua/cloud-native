@@ -25,12 +25,11 @@ server {
         try_files $uri =404;
     }
 
-    # 浏览器始终访问同源 /api，由 Nginx 转发到 Compose 网络内的 api 服务；
-    # 因此前端容器与 api 之间不需要 CORS，宿主机也不需要暴露 8080。
+    # 浏览器访问同源 /api，保留 Host 中的端口供后端比较请求来源。
     location /api/ {
         proxy_pass http://${API_UPSTREAM};
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
